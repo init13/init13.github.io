@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    
+    
+    <title>linux_heap_note | init13&#39;s blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    
+    <meta name="keywords" content="pwn,heap-overflow">
+    <link rel="shortcut icon" href="/img/favicon.png">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.2/dist/jquery.fancybox.min.css" />
+    <link rel="stylesheet" href="/css/style.css?v=1.4.4">
+    
+    <script type="text/javascript">
+        // Data Center
+        var DC = {
+            reward:	false,
+            lv: JSON.parse('{"enable":false,"app_id":null,"app_key":null,"icon":true}'),
+            v: JSON.parse('{"enable":false,"appid":null,"appkey":null,"notify":true,"verify":true,"placeholder":"give me some sugers plz...","avatar":"wavatar"}'),
+            g: JSON.parse('{"enable":false,"lazy":true,"owner":"codefine","repo":"gitment","oauth":{"client_id":null,"client_secret":null},"perPage":10}'),
+            d: JSON.parse('{"app_id":null}')
+        };
+    </script>
+    <script type="text/javascript">
+        window.lazyScripts=[];
+    </script>
+    
+</head>
+
+
+<body>
+    <div id="loading" class="active"></div>
+
+    <aside id="menu" class="">
+  <div class="inner flex-row-vertical">
+    <a href="javascript:;"  rel="noopener noopener" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
+        <i class="icon icon-lg icon-close"></i>
+    </a>
+    <div class="brand-wrap">
+      
+      <img src="/img/brand.jpeg" class="brand-bg">
+      
+      <div class="brand">
+        <a href="/" class="avatar waves-effect waves-circle waves-light">
+          <img src="/img/avatar.jpg">
+        </a>
+        <hgroup class="introduce">
+          <h5 class="nickname">init13</h5>
+          <a href="mailto:(＠￣ー￣＠)" title="(＠￣ー￣＠)" class="mail">
+            
+              <span>(</span>
+            
+              <span>＠</span>
+            
+              <span>￣</span>
+            
+              <span>ー</span>
+            
+              <span>￣</span>
+            
+              <span>＠</span>
+            
+              <span>)</span>
+            
+          </a>
+        </hgroup>
+        
+        <ul class="menu-link">
+          
+              <li>
+                <a href="https://github.com/init13" target="_blank">
+                  <i class="icon icon-lg icon-github"></i>
+                </a>
+              </li>
+            
+        </ul>
+        
+      </div>
+    </div>
+    <div class="scroll-wrap flex-col">
+      <ul class="nav">
+        
+            <li class="">
+              <a href="/"  >
+                <i class="icon icon-lg icon-home"></i>
+                HOME
+              </a>
+            </li>
+        
+            <li class="">
+              <a href="/categories"  >
+                <i class="icon icon-lg icon-th-list"></i>
+                CATEGORIES
+              </a>
+            </li>
+        
+            <li class="">
+              <a href="/tags"  >
+                <i class="icon icon-lg icon-tags"></i>
+                TAGS
+              </a>
+            </li>
+        
+            <li class="">
+              <a href="/archives"  >
+                <i class="icon icon-lg icon-archives"></i>
+                ARCHIVES
+              </a>
+            </li>
+        
+      </ul>
+    </div>
+  </div>
+</aside>
+
+    <main id="main">
+        <header class="top-header" id="header">
+    <div class="flex-row clearfix">
+        <a href="javascript:;"   rel="noopener noopener noopener" class="header-icon pull-left waves-effect waves-circle waves-light on" id="menu-toggle">
+          <i class="icon icon-lg icon-navicon"></i>
+        </a>
+        <div class="flex-col header-title ellipsis">
+            <span>linux_heap_note</span>
+            
+        </div>
+        
+        <a id="site_search_btn" class="header-icon pull-right waves-effect waves-circle waves-light">
+            <i class="icon icon-lg icon-search"></i>
+        </a>
+        
+    </div>
+</header>
+<header class="content-header post-header">
+    <img src="/img/banner.jpeg" class="header-bg">
+    <div class="container fade-scale">
+        <h1 class="title">linux_heap_note</h1>
+        <h5 class="subtitle">
+            
+                <time datetime="2020-06-08T06:29:35.000Z" itemprop="datePublished" class="page-time">
+  2020-06-08
+</time>
+
+
+	<ul class="article-category-list"><li class="article-category-list-item"><a class="article-category-list-link" href="/categories/pwn%E5%AD%A6%E4%B9%A0/">pwn学习</a></li></ul>
+
+            
+        </h5>
+        
+    </div>
+    
+
+</header>
+
+<div id="site_search">
+    <div class="search-title clearfix">
+        <span class="pull-left">
+          <i class="icon icon-lg icon-search"></i>
+        </span>
+        <input type="text" id="local-search-input" name="q" results="0" placeholder="search my blog..." class="form-control pull-left"/>
+        <a href="javascript:;"   rel="noopener noopener noopener" class="close pull-right waves-effect waves-circle waves-light">
+          <i class="icon icon-lg icon-close"></i>
+        </a>
+    </div>
+    <div id="local-search-result"></div>
+</div>
+
+
+
+<div class="container body-wrap">
+    <article id="post-linux-heap-note"
+  class="post-article article-type-post" itemprop="blogPost">
+    <div class="post-card">
+        <h1 class="post-card-title">linux_heap_note</h1>
+        <div class="post-meta">
+            <time class="post-time" title="2020-06-08 01:29:35" datetime="2020-06-08T06:29:35.000Z"  itemprop="datePublished">2020-06-08</time>
+
+            
+	<ul class="article-category-list"><li class="article-category-list-item"><a class="article-category-list-link" href="/categories/pwn%E5%AD%A6%E4%B9%A0/">pwn学习</a></li></ul>
+
+
+
+            
+
+            
+
+
+            
+        </div>
+        <div class="post-content" id="post-content" itemprop="postContent">
+            
+            <p>linux堆着一块的学习一直都是断断续续的，很多东西似懂非懂，所以特意写一篇文章来记录一些我觉得以后可能用得上的东西。</p>
+<h1 id="堆内存管理方式"><a href="#堆内存管理方式" class="headerlink" title="堆内存管理方式"></a>堆内存管理方式</h1><p>不同的平台有不同的内存管理方式，目前主要有如下几种内存管理机制：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">dlmalloc – General purpose allocator</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">ptmalloc2 – glibc</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">jemalloc – FreeBSD and Firefox</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">tcmalloc – Google</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">libumem – Solaris</span></pre></td></tr></table></figure>
+<p>每种内存管理机制都有它自己的适用场景，对于一些内存使用较大的应用它的表现性能主要看的就是内存的调度的效率。</p>
+<p>Linux早期使用的是dlmalloc，但是如果有两个线程同时调用malloc时，只能有一个线程可以访问临界资源，这使得堆的内存管理在多线程中效率低下，所以dlmalloc中fork出了新的分支–ptmalloc。在ptmalloc中，如果有两个线程同时调用malloc时，每个线程都会同时得到处理，因为每个线程都有各自维护一个堆空间和可利用空间表（freelist），它们被称为 <em>per thread arena</em>。</p>
+<h1 id="Linux下的malloc实现原理"><a href="#Linux下的malloc实现原理" class="headerlink" title="Linux下的malloc实现原理"></a>Linux下的malloc实现原理</h1><p>在Linux平台中malloc本质上是通过系统调用 <em>brk</em> 和 <em>mmap</em> 实现的：</p>
+<figure class="image-box">
+                <a rel=linux_heap_note href="/img/posts-img/linux_heap-1.png" title="图1" data-fancybox="images"><img src="/img/posts-img/linux_heap-1.png" alt="图1" title="" class=""></a>
+                <p>图1</p>
+            </figure>
+
+<p><em>brk</em> ：brk通过移动程序间断点(program break location)来增加内存的（无0填充），在未初始化时堆的起始地址(start_brk)和结束地址(brk)会指向相同的位置—data/bss段的结束位置。而在ALSR开启后，则会加上一段随机的偏移。</p>
+<p><em>mmap</em> ：mmap创造的空间是私有且匿名的，分配的内存会被初始化为0，它只能被运行进程管理。</p>
+<figure class="image-box">
+                <a rel=linux_heap_note href="/img/posts-img/linux_heap-2.png" title="图2" data-fancybox="images"><img src="/img/posts-img/linux_heap-2.png" alt="图2" title="" class=""></a>
+                <p>图2</p>
+            </figure>
+
+<p>详见：<a href="https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/"    rel="noopener noopener noopener noopener">https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/</a></p>
+<h1 id="主线程和子线程调用malloc"><a href="#主线程和子线程调用malloc" class="headerlink" title="主线程和子线程调用malloc"></a>主线程和子线程调用malloc</h1><p><a href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/"    rel="noopener noopener noopener noopener">https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/</a> 这篇文章有代码演示，可以去看看详细。<br>在程序第一次使用堆空间之前堆是不会初始化的，而我参考的这篇文章代码中用了printf和getpid函数是需要用到堆空间的，但是不知道为啥文中似乎并没有这个影响，所以如果自己做实验的话推荐用setvbuf把输入输出的缓冲关掉，同时删除getpid这一行。</p>
+<p>在主线程中，当程序第一次调用malloc时，如果申请的空间不超过128kb（64位似乎是1mb）的话，会直接调用brk扩展132kb的空间，这段空间被称为arena，因为是主线程申请的所以叫main arena。这段空间由glibc管理，之后申请空间会优先使用mian arena 的部分，并且当空间用完或者空闲空间过多会通过改变程序间断点(brk)来调整堆的大小。</p>
+<p>在main arena中申请的空间按照需求分成一个个块（chunk），由glic的malloc库函数管理，当chunk被<br>释放（free）后会被添加到main arena的bin（这个是用于存储空闲块的一个双向链表结构）中而不是直接归还给系统。之后如果有新的空间申请会优先查询bins和topchunk</p>
+<p>当建立一个新的线程时，会初始化一个栈空间，并且只有在malloc之后才会通过mmap去分配堆空间。（注意这里申请的对空间虽然有1mb，但是只有132kb被标记为可读写，这段空间被称为tread arena），对于线程的空间管理剩下的和main arena相同</p>
+<h1 id="arena介绍"><a href="#arena介绍" class="headerlink" title="arena介绍"></a>arena介绍</h1><p>每一个线程并不是都可以有自己独立的arena，arena的数量是和系统中核心数相关的：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">For 32 bit systems:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">     Number of arena &#x3D; 2 * number of cores + 1.</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">For 64 bit systems:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">     Number of arena &#x3D; 8 * number of cores + 1.</span></pre></td></tr></table></figure>
+<p>如果需要用到堆的线程超过了这个数量，该如何处理？</p>
+<p>假设我们有一台一核心的32位的电脑（arena数量最大=1*2+1=3）运行一个多线程的应用，共四线程–主线程和三个用户线程。</p>
+<p>当主线程和线程1，2首次调用malloc时都是直接分配arena空间，并且每一个线程都与各自的arena一一对应。但是当线程3调用malloc时，可以分配的arena数量已经到达上限了，这时会去通过重复利用已经存在的arena：<br>    1. 首先会去遍历一遍所有的，并尝试给每个arena加锁（表示这个arena是占用状态）<br>    2. 如果成功加锁则将这个arena返回给用户使用。<br>    3. 如果失败线程3会被阻塞直至有可用的arena<br>当线程3第二次调用时，malloc会尝试使用上次成功使用的arena，如果失败则阻塞至可用为止。</p>
+<h1 id="堆的数据结构"><a href="#堆的数据结构" class="headerlink" title="堆的数据结构"></a>堆的数据结构</h1><p>glibc中关于heap主要有三个结构需要关注：</p>
+<h2 id="heap-info-heap-header"><a href="#heap-info-heap-header" class="headerlink" title="heap_info(heap header)"></a>heap_info(heap header)</h2><p>因为thread arena 可以包含多个heap，并且通常情况这些堆空间都不是连续的，所以为了区分多个不同的heap，所有通过mmap处申请的空间都会包含这个结构。而main arena 是通过sbrk()扩展的堆空间所以没有heap_info的数据结构。</p>
+<p>heap_info</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">typedef struct _heap_info</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  mstate ar_ptr; &#x2F;* Arena for this heap. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  struct _heap_info *prev; &#x2F;* Previous heap. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  size_t size;   &#x2F;* Current size in bytes. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  size_t mprotect_size; &#x2F;* Size in bytes that has been mprotected</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">                           PROT_READ|PROT_WRITE.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Make sure the following data is properly aligned, particularly</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">     that sizeof (heap_info) + 2 * SIZE_SZ is a multiple of</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">     MALLOC_ALIGNMENT. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">  char pad[-6 * SIZE_SZ &amp; MALLOC_ALIGN_MASK];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">&#125; heap_info;</span></pre></td></tr></table></figure>
+
+<h2 id="malloc-state-arena-header"><a href="#malloc-state-arena-header" class="headerlink" title="malloc_state(arena header)"></a>malloc_state(arena header)</h2><p>这个结构用于记录arena的状态，如：各个bins，top chunk以及last remainder chunk等信息。<br>注意，main arena的malloc_state并不是sbrk申请的空间的一部分，他存储在libc.so中的数据段中，是一个全局变量。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">struct malloc_state</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">&#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Serialize access.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  mutex_t mutex;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Flags (formerly in max_fast).  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  int flags;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Fastbins *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  mfastbinptr fastbinsY[NFASTBINS];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Base of the topmost chunk -- not otherwise kept in a bin *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  mchunkptr top;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* The remainder from the most recent split of a small request *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">  mchunkptr last_remainder;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Normal bins packed as described above *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">  mchunkptr bins[NBINS * 2 - 2];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Bitmap of bins *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">  unsigned int binmap[BINMAPSIZE];</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Linked list *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">  struct malloc_state *next;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Linked list for free arenas.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">  struct malloc_state *next_free;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Memory allocated from the system in this arena.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T system_mem;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">23</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T max_system_mem;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">24</span></pre></td><td class="code"><pre><span class="line">&#125;;</span></pre></td></tr></table></figure>
+
+<h2 id="malloc-chunk-chunk-header"><a href="#malloc-chunk-chunk-header" class="headerlink" title="malloc_chunk(chunk header)"></a>malloc_chunk(chunk header)</h2><p>一个heap是通过分成多个chunk块来使用的，chunk是堆空间的最小单位。每个chunk的大小根据申请来决定的，这个结构用来记录当前chunk的使用情况它存在于每个chunk的头部，并且和之后的堆溢出有相当重要的联系，需要重点注意。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">struct malloc_chunk &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* #define INTERNAL_SIZE_T size_t *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T      prev_size;  &#x2F;* Size of previous chunk (if free).  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">  INTERNAL_SIZE_T      size;       &#x2F;* Size in bytes, including overhead. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* fd;         &#x2F;* double links -- used only if free. 这两个指针只在free chunk中存在*&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* bk;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line"> </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">  &#x2F;* Only used for large blocks: pointer to next larger size.  *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* fd_nextsize; &#x2F;* double links -- used only if free. *&#x2F;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">  struct malloc_chunk* bk_nextsize;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">&#125;;</span></pre></td></tr></table></figure>
+
+<h2 id="main-arena和thread-arena的内存分布图："><a href="#main-arena和thread-arena的内存分布图：" class="headerlink" title="main_arena和thread arena的内存分布图："></a>main_arena和thread arena的内存分布图：</h2><figure class="image-box">
+                <a rel=linux_heap_note href="/img/posts-img/linux_heap-3.png" title="图3" data-fancybox="images"><img src="/img/posts-img/linux_heap-3.png" alt="图3" title="" class=""></a>
+                <p>图3</p>
+            </figure>
+<p>由图可以看出无论是在使用的块还是空闲块都有malloc_chunk结构，并且只有thread arena有heap info。</p>
+<h2 id="多个heap的thread-arena的内存分布图："><a href="#多个heap的thread-arena的内存分布图：" class="headerlink" title="多个heap的thread arena的内存分布图："></a>多个heap的thread arena的内存分布图：</h2><figure class="image-box">
+                <a rel=linux_heap_note href="/img/posts-img/linux_heap-4.png" title="图4" data-fancybox="images"><img src="/img/posts-img/linux_heap-4.png" alt="图4" title="" class=""></a>
+                <p>图4</p>
+            </figure>
+<p>当thread arena 有多个heap时它们是通过heap_info的指针形成了一个单向链表，并且top chunk永远是在新申请的那个heap中。</p>
+<h1 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h1><p>1.<a href="https://segmentfault.com/a/1190000005118060"    rel="noopener noopener noopener noopener">https://segmentfault.com/a/1190000005118060</a><br>2.<a href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/"    rel="noopener noopener noopener noopener">https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/</a><br>3.<a href="https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/"    rel="noopener noopener noopener noopener">https://sploitfun.wordpress.com/2015/02/11/syscalls-used-by-malloc/</a><br>4.<a href="https://www.jianshu.com/p/cd7f63fca008"    rel="noopener noopener noopener noopener">https://www.jianshu.com/p/cd7f63fca008</a></p>
+
+        </div>
+        
+<blockquote class="post-copyright">
+    <div class="content">
+        
+<span class="post-time">
+    Last updated: <time datetime="2020-06-28T14:54:55.287Z" itemprop="dateUpdated">2020-06-28 09:54:55</time>
+</span><br>
+
+
+        
+        转载注明出处，原文地址：<a href="/2020/06/08/linux-heap-note/" target="_blank" rel="external">http://init13.github.io/2020/06/08/linux-heap-note/</a>
+        
+    </div>
+    <footer>
+        <a href="http://init13.github.io">
+            <img src="/img/avatar.jpg" alt="init13">
+            init13
+        </a>
+    </footer>
+</blockquote>
+
+        
+        <div class="post-footer">
+            
+	<ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/heap-overflow/" rel="tag">heap-overflow</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/pwn/" rel="tag">pwn</a></li></ul>
+
+        </div>
+        
+            
+
+
+        
+    </div>
+    
+<nav class="post-nav flex-row flex-justify-between">
+  
+    <div class="prev">
+      <a href="/2020/06/28/linux-heap-chunk-bins/" id="post-prev" class="post-nav-link">
+        <div class="tips"><i class="icon icon-angle-left icon-lg icon-pr"></i> Prev</div>
+        <h4 class="title">linux_heap_chunk&amp;bins</h4>
+      </a>
+    </div>
+  
+
+  
+    <div class="next">
+      <a href="/2020/03/15/return-to-dl-resolve(32)/" id="post-next" class="post-nav-link">
+        <div class="tips">Next <i class="icon icon-angle-right icon-lg icon-pl"></i></div>
+        <h4 class="title">return-to-dl-resolve(32)</h4>
+      </a>
+    </div>
+  
+</nav>
+
+
+    
+    
+        <aside class="post-widget">
+            <nav class="post-toc-wrap" id="post-toc">
+                <strong>目录</strong>
+                <ol class="post-toc"><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#堆内存管理方式"><span class="post-toc-number">1.</span> <span class="post-toc-text">堆内存管理方式</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#Linux下的malloc实现原理"><span class="post-toc-number">2.</span> <span class="post-toc-text">Linux下的malloc实现原理</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#主线程和子线程调用malloc"><span class="post-toc-number">3.</span> <span class="post-toc-text">主线程和子线程调用malloc</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#arena介绍"><span class="post-toc-number">4.</span> <span class="post-toc-text">arena介绍</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#堆的数据结构"><span class="post-toc-number">5.</span> <span class="post-toc-text">堆的数据结构</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#heap-info-heap-header"><span class="post-toc-number">5.1.</span> <span class="post-toc-text">heap_info(heap header)</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#malloc-state-arena-header"><span class="post-toc-number">5.2.</span> <span class="post-toc-text">malloc_state(arena header)</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#malloc-chunk-chunk-header"><span class="post-toc-number">5.3.</span> <span class="post-toc-text">malloc_chunk(chunk header)</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#main-arena和thread-arena的内存分布图："><span class="post-toc-number">5.4.</span> <span class="post-toc-text">main_arena和thread arena的内存分布图：</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#多个heap的thread-arena的内存分布图："><span class="post-toc-number">5.5.</span> <span class="post-toc-text">多个heap的thread arena的内存分布图：</span></a></li></ol></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#参考链接"><span class="post-toc-number">6.</span> <span class="post-toc-text">参考链接</span></a></li></ol>
+            </nav>
+            <div class="toc-bar"><div>
+        </aside>
+    
+</article>
+
+
+</div>
+
+    </main>
+    <footer class="footer ">
+    
+    <div class="top">
+        
+            <p>
+    <span>Links：</span>
+    
+    <span class="blogroll-item">
+        <a href="https://www.github.com" target="_blank">github</a>
+    </span>
+    
+</p>
+
+        
+    </div>
+    
+    <div class="bottom">
+        <p>
+            <span>
+                init13 &copy; 2017 - 2020
+            </span>
+        		
+           	
+            
+            
+            <span>
+	            Power by <a href="http://hexo.io/" target="_blank">Hexo</a> Theme <a href="https://github.com/codefine/hexo-theme-mellow" target="_blank">mellow</a>
+            </span>
+            
+            
+            
+
+            
+                
+<span class="site-uv" title="总访客量">
+    <i class="icon icon-user"></i>
+    <i class="busuanzi-value" id="busuanzi_value_site_uv"></i>
+</span>
+
+
+<span class="site-pv" title="总访问量">
+    <i class="icon icon-eye"></i>
+    <i class="busuanzi-value" id="busuanzi_value_site_pv"></i>
+</span>
+
+            
+        </p>
+    </div>
+</footer>
+
+    <div class="mask" id="mask"></div>
+<a href="javascript:;"  rel="noopener noopener" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
+
+
+    
+    <!-- main-js -->
+<script type="text/javascript" src="//cdn.bootcss.com/jquery/2.1.0/jquery.min.js"></script>
+<script type="text/javascript" src="/js/plugins/fastclick.js?v=1.4.4"></script>
+<script type="text/javascript" src="/js/plugins/ios-orientationchange-fix.js?v=1.4.4"></script>
+<script type="text/javascript" src="//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.2/dist/jquery.fancybox.min.js"></script>
+
+<script type="text/javascript" src="//cdn.bootcss.com/node-waves/0.7.4/waves.min.js"></script>
+
+<script type="text/javascript" src="/js/method.js?v=1.4.4"></script>
+<script type="text/javascript" src="/js/blog.js?v=1.4.4"></script>
+
+<!-- third-party -->
+
+
+
+
+
+
+<script type="text/javascript" src="/js/plugins/local_search.js?v=1.4.4"></script>
+<script type="text/javascript">
+	var search_path = "search.xml";
+	if (search_path.length === 0) {
+		search_path = "search.xml";
+	}
+	var path = "/" + search_path;
+	searchFunc(path, "local-search-input", "local-search-result");
+</script>
+
+
+
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+    
+    
+
+
+
+
+
+    <!-- mathjax config similar to math.stackexchange -->
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+            processEscapes: true,
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+    });
+</script>
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+            all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+    });
+</script>
+
+<script type="text/javascript" src="//cdn.bootcss.com/mathjax/2.7.1/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+
+
+
+    <script>
+    (function() {
+        var OriginTitile = document.title, titleTime;
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                document.title = '(o>ェ<)';
+                clearTimeout(titleTime);
+            } else {
+                document.title = '(つェ⊂)咦!又好了!';
+                titleTime = setTimeout(function() {
+                    document.title = OriginTitile;
+                },2000);
+            }
+        });
+    })();
+</script>
+
+
+
+
+
+    
+</body>
+</html>

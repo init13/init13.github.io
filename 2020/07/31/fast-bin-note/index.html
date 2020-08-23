@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    
+    
+    <title>fast_bin_note | init13&#39;s blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    
+    <meta name="keywords" content="pwn,heap-overflow,bins">
+    <link rel="shortcut icon" href="/img/favicon.png">
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.2/dist/jquery.fancybox.min.css" />
+    <link rel="stylesheet" href="/css/style.css?v=1.4.4">
+    
+    <script type="text/javascript">
+        // Data Center
+        var DC = {
+            reward:	false,
+            lv: JSON.parse('{"enable":false,"app_id":null,"app_key":null,"icon":true}'),
+            v: JSON.parse('{"enable":false,"appid":null,"appkey":null,"notify":true,"verify":true,"placeholder":"give me some sugers plz...","avatar":"wavatar"}'),
+            g: JSON.parse('{"enable":false,"lazy":true,"owner":"codefine","repo":"gitment","oauth":{"client_id":null,"client_secret":null},"perPage":10}'),
+            d: JSON.parse('{"app_id":null}')
+        };
+    </script>
+    <script type="text/javascript">
+        window.lazyScripts=[];
+    </script>
+    
+</head>
+
+
+<body>
+    <div id="loading" class="active"></div>
+
+    <aside id="menu" class="">
+  <div class="inner flex-row-vertical">
+    <a href="javascript:;"  rel="noopener noopener" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
+        <i class="icon icon-lg icon-close"></i>
+    </a>
+    <div class="brand-wrap">
+      
+      <img src="/img/brand.jpeg" class="brand-bg">
+      
+      <div class="brand">
+        <a href="/" class="avatar waves-effect waves-circle waves-light">
+          <img src="/img/avatar.jpg">
+        </a>
+        <hgroup class="introduce">
+          <h5 class="nickname">init13</h5>
+          <a href="mailto:(＠￣ー￣＠)" title="(＠￣ー￣＠)" class="mail">
+            
+              <span>(</span>
+            
+              <span>＠</span>
+            
+              <span>￣</span>
+            
+              <span>ー</span>
+            
+              <span>￣</span>
+            
+              <span>＠</span>
+            
+              <span>)</span>
+            
+          </a>
+        </hgroup>
+        
+        <ul class="menu-link">
+          
+              <li>
+                <a href="https://github.com/init13" target="_blank">
+                  <i class="icon icon-lg icon-github"></i>
+                </a>
+              </li>
+            
+        </ul>
+        
+      </div>
+    </div>
+    <div class="scroll-wrap flex-col">
+      <ul class="nav">
+        
+            <li class="">
+              <a href="/"  >
+                <i class="icon icon-lg icon-home"></i>
+                HOME
+              </a>
+            </li>
+        
+            <li class="">
+              <a href="/categories"  >
+                <i class="icon icon-lg icon-th-list"></i>
+                CATEGORIES
+              </a>
+            </li>
+        
+            <li class="">
+              <a href="/tags"  >
+                <i class="icon icon-lg icon-tags"></i>
+                TAGS
+              </a>
+            </li>
+        
+            <li class="">
+              <a href="/archives"  >
+                <i class="icon icon-lg icon-archives"></i>
+                ARCHIVES
+              </a>
+            </li>
+        
+      </ul>
+    </div>
+  </div>
+</aside>
+
+    <main id="main">
+        <header class="top-header" id="header">
+    <div class="flex-row clearfix">
+        <a href="javascript:;"   rel="noopener noopener noopener" class="header-icon pull-left waves-effect waves-circle waves-light on" id="menu-toggle">
+          <i class="icon icon-lg icon-navicon"></i>
+        </a>
+        <div class="flex-col header-title ellipsis">
+            <span>fast_bin_note</span>
+            
+        </div>
+        
+        <a id="site_search_btn" class="header-icon pull-right waves-effect waves-circle waves-light">
+            <i class="icon icon-lg icon-search"></i>
+        </a>
+        
+    </div>
+</header>
+<header class="content-header post-header">
+    <img src="/img/banner.jpeg" class="header-bg">
+    <div class="container fade-scale">
+        <h1 class="title">fast_bin_note</h1>
+        <h5 class="subtitle">
+            
+                <time datetime="2020-07-31T12:13:09.000Z" itemprop="datePublished" class="page-time">
+  2020-07-31
+</time>
+
+
+	<ul class="article-category-list"><li class="article-category-list-item"><a class="article-category-list-link" href="/categories/pwn%E5%AD%A6%E4%B9%A0/">pwn学习</a></li></ul>
+
+            
+        </h5>
+        
+    </div>
+    
+
+</header>
+
+<div id="site_search">
+    <div class="search-title clearfix">
+        <span class="pull-left">
+          <i class="icon icon-lg icon-search"></i>
+        </span>
+        <input type="text" id="local-search-input" name="q" results="0" placeholder="search my blog..." class="form-control pull-left"/>
+        <a href="javascript:;"   rel="noopener noopener noopener" class="close pull-right waves-effect waves-circle waves-light">
+          <i class="icon icon-lg icon-close"></i>
+        </a>
+    </div>
+    <div id="local-search-result"></div>
+</div>
+
+
+
+<div class="container body-wrap">
+    <article id="post-fast-bin-note"
+  class="post-article article-type-post" itemprop="blogPost">
+    <div class="post-card">
+        <h1 class="post-card-title">fast_bin_note</h1>
+        <div class="post-meta">
+            <time class="post-time" title="2020-07-31 07:13:09" datetime="2020-07-31T12:13:09.000Z"  itemprop="datePublished">2020-07-31</time>
+
+            
+	<ul class="article-category-list"><li class="article-category-list-item"><a class="article-category-list-link" href="/categories/pwn%E5%AD%A6%E4%B9%A0/">pwn学习</a></li></ul>
+
+
+
+            
+
+            
+
+
+            
+        </div>
+        <div class="post-content" id="post-content" itemprop="postContent">
+            
+            <p>本篇主要集中记录一下pwn中和fast bin有关的一些机制。虽然新版本的glibc添加了tcache功能，并且tcache在检查上似乎比fastbin少，大部分情况下是对tcache的攻击较多，但是新版本并没有删除fast bin并且检查机制基本没变，所以还是有必要记录一下。（本篇的源代码摘自glibc 2.23）</p>
+<h1 id="fast-bin相关的检查机制"><a href="#fast-bin相关的检查机制" class="headerlink" title="fast bin相关的检查机制"></a>fast bin相关的检查机制</h1><h2 id="free"><a href="#free" class="headerlink" title="free"></a>free</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">if (__builtin_expect ((uintptr_t) p &gt; (uintptr_t) -size, 0)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">      || __builtin_expect (misaligned_chunk (p), 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">    &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">      errstr &#x3D; &quot;free(): invalid pointer&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">    errout:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">      if (!have_lock &amp;&amp; locked)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">        (void) mutex_unlock (&amp;av-&gt;mutex);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">      malloc_printerr (check_action, errstr, chunk2mem (p), av);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">      return;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">if (__glibc_unlikely (size &lt; MINSIZE || !aligned_OK (size)))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">    &#123;    </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">      errstr &#x3D; &quot;free(): invalid size&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">      goto errout;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr></table></figure>
+<p>free的时候首先是一个指针大小和有无对齐的检查，之后是size的检查，判断size是否小于最小值和是否对齐。不过这个size在取的时候已经将最后3位置0了，所以只需要保证倒数第四位是0就行。值得注意的是这个指针合理性的检查只存在free的时候，所以通过uaf等手段修改fd指针时不需要考虑对齐这个问题。<br>之后是判断块的大小属于的哪个bin，这里只考虑fast bin中的检查。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">if (__builtin_expect (chunk_at_offset (p, size)-&gt;size &lt;&#x3D; 2 * SIZE_SZ, 0)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">    || __builtin_expect (chunksize (chunk_at_offset (p, size))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">                 &gt;&#x3D; av-&gt;system_mem, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">if (__builtin_expect (old &#x3D;&#x3D; p, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">      &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">        errstr &#x3D; &quot;double free or corruption (fasttop)&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">        goto errout;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">      &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line"></span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">if (have_lock &amp;&amp; old !&#x3D; NULL &amp;&amp; __builtin_expect (old_idx !&#x3D; idx, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">      &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">    errstr &#x3D; &quot;invalid fastbin entry (free)&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">    goto errout;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">      &#125;</span></pre></td></tr></table></figure>
+<p>首先是对free的这个块的下一个块的大小进行判断是否在合理的范围内，然后查看相应的fastbin链表中的第一个块是否是和要释放的块是一样的并保证它们都属于同一个fast bin，防止double free。之后是一些多线程的检查与细节上的处理，这里就不多说了。</p>
+<h2 id="malloc"><a href="#malloc" class="headerlink" title="malloc"></a>malloc</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">if ((unsigned long) (nb) &lt;&#x3D; (unsigned long) (get_max_fast ())) </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">2</span></pre></td><td class="code"><pre><span class="line">    &#123;    </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">3</span></pre></td><td class="code"><pre><span class="line">      idx &#x3D; fastbin_index (nb);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">4</span></pre></td><td class="code"><pre><span class="line">      mfastbinptr *fb &#x3D; &amp;fastbin (av, idx);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">5</span></pre></td><td class="code"><pre><span class="line">      mchunkptr pp &#x3D; *fb; </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">6</span></pre></td><td class="code"><pre><span class="line">      do   </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">7</span></pre></td><td class="code"><pre><span class="line">        &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">8</span></pre></td><td class="code"><pre><span class="line">          victim &#x3D; pp;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">9</span></pre></td><td class="code"><pre><span class="line">          if (victim &#x3D;&#x3D; NULL)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">10</span></pre></td><td class="code"><pre><span class="line">            break;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">11</span></pre></td><td class="code"><pre><span class="line">        &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">12</span></pre></td><td class="code"><pre><span class="line">      while ((pp &#x3D; catomic_compare_and_exchange_val_acq (fb, victim-&gt;fd, victim))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">13</span></pre></td><td class="code"><pre><span class="line">             !&#x3D; victim);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">14</span></pre></td><td class="code"><pre><span class="line">      if (victim !&#x3D; 0)</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">15</span></pre></td><td class="code"><pre><span class="line">        &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">16</span></pre></td><td class="code"><pre><span class="line">          if (__builtin_expect (fastbin_index (chunksize (victim)) !&#x3D; idx, 0))</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">17</span></pre></td><td class="code"><pre><span class="line">            &#123;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">18</span></pre></td><td class="code"><pre><span class="line">              errstr &#x3D; &quot;malloc(): memory corruption (fast)&quot;;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">19</span></pre></td><td class="code"><pre><span class="line">            errout:</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">20</span></pre></td><td class="code"><pre><span class="line">              malloc_printerr (check_action, errstr, chunk2mem (victim), av); </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">21</span></pre></td><td class="code"><pre><span class="line">              return NULL;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">22</span></pre></td><td class="code"><pre><span class="line">            &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">23</span></pre></td><td class="code"><pre><span class="line">          check_remalloced_chunk (av, victim, nb); </span></pre></td></tr><tr><td class="gutter"><pre><span class="line">24</span></pre></td><td class="code"><pre><span class="line">          void *p &#x3D; chunk2mem (victim);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">25</span></pre></td><td class="code"><pre><span class="line">          alloc_perturb (p, bytes);</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">26</span></pre></td><td class="code"><pre><span class="line">          return p;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">27</span></pre></td><td class="code"><pre><span class="line">        &#125;</span></pre></td></tr><tr><td class="gutter"><pre><span class="line">28</span></pre></td><td class="code"><pre><span class="line">    &#125;</span></pre></td></tr></table></figure>
+<p>源码里面处理catomic_compare_and_exchange_val_acq这个函数似乎是lock-free算法，这个是防止多线程中出现的一些问题，这里也不多解释，反正最后是为了保证fast bin中的第一个块被正常取出。之后的检查也很简单，就检查了下相应的fast bin的第一个块的size是不是属于该bin，并且也没有检查第二个空闲块是否合理，由于fast bin只用了一个fd指针，所以fast bin的攻击相对其它bin简单很多，并且需要注意的是这里并没有对取出来的块的下一个物理相邻块的pre_inuse位进行设值和检查，这给malloc_consolidate提供了不错的攻击环境。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>free 伪造堆块需要注意的有：</p>
+<ol>
+<li>指向伪造堆块的指针要对齐</li>
+<li>伪造的堆块size除了要属于fastbin范围内也需要注意对齐。</li>
+<li>fastbin中的第一个块不能等与要释放的块，并且它的大小要属于这个bin。</li>
+<li>伪造的堆块的“下一个”物理相邻的堆块size大小是否属于正常范围内（似乎没做对齐检查）。</li>
+</ol>
+<p>malloc 伪造堆块需要注意的有：</p>
+<ol>
+<li>检查fast bin中的要取出的块（第一个块）size是否属于该bin。</li>
+</ol>
+<h1 id="相关的攻击"><a href="#相关的攻击" class="headerlink" title="相关的攻击"></a>相关的攻击</h1><h2 id="double-free"><a href="#double-free" class="headerlink" title="double free"></a>double free</h2><p>由于fast bin的double free检查只有对fast bin中的第一个块检查，所以可以a-b-a这样的free顺序绕过，之后通过修改fd指针达到改写内存的目的，不过要注意fd的指针指向的伪造块的size要属于这个fast bin。</p>
+<h2 id="use-after-free"><a href="#use-after-free" class="headerlink" title="use after free"></a>use after free</h2><p>和上面类似，也是通过对已经释放的指针进行修改。</p>
+<h2 id="malloc-consolidate"><a href="#malloc-consolidate" class="headerlink" title="malloc_consolidate"></a>malloc_consolidate</h2><p>这个函数是将fast bin中的块全部取出，检查是否能前后合并，之后放入相应的bin中，并修改下一个块的pre_inuse位，利用这个手段可以将fast bin放入到相应的small bin中，从而绕过fast bin中的double free检查。此时下一个物理相邻块的pre_inuse位并不会被改写，所以可以通过这个方法伪造堆块与其合并，并利用unlink手段（unlink的检查也很简单只判断了fd-&gt;bk==p和bk-&gt;fd==p）来修改内存。</p>
+
+        </div>
+        
+<blockquote class="post-copyright">
+    <div class="content">
+        
+<span class="post-time">
+    Last updated: <time datetime="2020-08-01T13:27:55.915Z" itemprop="dateUpdated">2020-08-01 08:27:55</time>
+</span><br>
+
+
+        
+        转载注明出处，原文地址：<a href="/2020/07/31/fast-bin-note/" target="_blank" rel="external">http://init13.github.io/2020/07/31/fast-bin-note/</a>
+        
+    </div>
+    <footer>
+        <a href="http://init13.github.io">
+            <img src="/img/avatar.jpg" alt="init13">
+            init13
+        </a>
+    </footer>
+</blockquote>
+
+        
+        <div class="post-footer">
+            
+	<ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/bins/" rel="tag">bins</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/heap-overflow/" rel="tag">heap-overflow</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/pwn/" rel="tag">pwn</a></li></ul>
+
+        </div>
+        
+            
+
+
+        
+    </div>
+    
+<nav class="post-nav flex-row flex-justify-between">
+  
+    <div class="prev">
+      <a href="/2020/08/21/tcache-note/" id="post-prev" class="post-nav-link">
+        <div class="tips"><i class="icon icon-angle-left icon-lg icon-pr"></i> Prev</div>
+        <h4 class="title">tcache_note</h4>
+      </a>
+    </div>
+  
+
+  
+    <div class="next">
+      <a href="/2020/06/28/linux-heap-chunk-bins/" id="post-next" class="post-nav-link">
+        <div class="tips">Next <i class="icon icon-angle-right icon-lg icon-pl"></i></div>
+        <h4 class="title">linux_heap_chunk&amp;bins</h4>
+      </a>
+    </div>
+  
+</nav>
+
+
+    
+    
+        <aside class="post-widget">
+            <nav class="post-toc-wrap" id="post-toc">
+                <strong>目录</strong>
+                <ol class="post-toc"><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#fast-bin相关的检查机制"><span class="post-toc-number">1.</span> <span class="post-toc-text">fast bin相关的检查机制</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#free"><span class="post-toc-number">1.1.</span> <span class="post-toc-text">free</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#malloc"><span class="post-toc-number">1.2.</span> <span class="post-toc-text">malloc</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#总结"><span class="post-toc-number">1.3.</span> <span class="post-toc-text">总结</span></a></li></ol></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#相关的攻击"><span class="post-toc-number">2.</span> <span class="post-toc-text">相关的攻击</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#double-free"><span class="post-toc-number">2.1.</span> <span class="post-toc-text">double free</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#use-after-free"><span class="post-toc-number">2.2.</span> <span class="post-toc-text">use after free</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#malloc-consolidate"><span class="post-toc-number">2.3.</span> <span class="post-toc-text">malloc_consolidate</span></a></li></ol></li></ol>
+            </nav>
+            <div class="toc-bar"><div>
+        </aside>
+    
+</article>
+
+
+</div>
+
+    </main>
+    <footer class="footer ">
+    
+    <div class="top">
+        
+            <p>
+    <span>Links：</span>
+    
+    <span class="blogroll-item">
+        <a href="https://www.github.com" target="_blank">github</a>
+    </span>
+    
+</p>
+
+        
+    </div>
+    
+    <div class="bottom">
+        <p>
+            <span>
+                init13 &copy; 2017 - 2020
+            </span>
+        		
+           	
+            
+            
+            <span>
+	            Power by <a href="http://hexo.io/" target="_blank">Hexo</a> Theme <a href="https://github.com/codefine/hexo-theme-mellow" target="_blank">mellow</a>
+            </span>
+            
+            
+            
+
+            
+                
+<span class="site-uv" title="总访客量">
+    <i class="icon icon-user"></i>
+    <i class="busuanzi-value" id="busuanzi_value_site_uv"></i>
+</span>
+
+
+<span class="site-pv" title="总访问量">
+    <i class="icon icon-eye"></i>
+    <i class="busuanzi-value" id="busuanzi_value_site_pv"></i>
+</span>
+
+            
+        </p>
+    </div>
+</footer>
+
+    <div class="mask" id="mask"></div>
+<a href="javascript:;"  rel="noopener noopener" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
+
+
+    
+    <!-- main-js -->
+<script type="text/javascript" src="//cdn.bootcss.com/jquery/2.1.0/jquery.min.js"></script>
+<script type="text/javascript" src="/js/plugins/fastclick.js?v=1.4.4"></script>
+<script type="text/javascript" src="/js/plugins/ios-orientationchange-fix.js?v=1.4.4"></script>
+<script type="text/javascript" src="//cdn.jsdelivr.net/gh/fancyapps/fancybox@3.5.2/dist/jquery.fancybox.min.js"></script>
+
+<script type="text/javascript" src="//cdn.bootcss.com/node-waves/0.7.4/waves.min.js"></script>
+
+<script type="text/javascript" src="/js/method.js?v=1.4.4"></script>
+<script type="text/javascript" src="/js/blog.js?v=1.4.4"></script>
+
+<!-- third-party -->
+
+
+
+
+
+
+<script type="text/javascript" src="/js/plugins/local_search.js?v=1.4.4"></script>
+<script type="text/javascript">
+	var search_path = "search.xml";
+	if (search_path.length === 0) {
+		search_path = "search.xml";
+	}
+	var path = "/" + search_path;
+	searchFunc(path, "local-search-input", "local-search-result");
+</script>
+
+
+
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+    
+    
+
+
+
+
+
+    <!-- mathjax config similar to math.stackexchange -->
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+            processEscapes: true,
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+    });
+</script>
+
+<script type="text/x-mathjax-config">
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+            all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+    });
+</script>
+
+<script type="text/javascript" src="//cdn.bootcss.com/mathjax/2.7.1/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+
+
+
+    <script>
+    (function() {
+        var OriginTitile = document.title, titleTime;
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                document.title = '(o>ェ<)';
+                clearTimeout(titleTime);
+            } else {
+                document.title = '(つェ⊂)咦!又好了!';
+                titleTime = setTimeout(function() {
+                    document.title = OriginTitile;
+                },2000);
+            }
+        });
+    })();
+</script>
+
+
+
+
+
+    
+</body>
+</html>
