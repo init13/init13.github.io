@@ -26,7 +26,7 @@
         window.lazyScripts=[];
     </script>
     
-</head>
+<meta name="generator" content="Hexo 4.2.1"></head>
 
 
 <body>
@@ -34,7 +34,7 @@
 
     <aside id="menu" class="">
   <div class="inner flex-row-vertical">
-    <a href="javascript:;"  rel="noopener noopener" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
+    <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
         <i class="icon icon-lg icon-close"></i>
     </a>
     <div class="brand-wrap">
@@ -117,7 +117,7 @@
     <main id="main">
         <header class="top-header" id="header">
     <div class="flex-row clearfix">
-        <a href="javascript:;"   rel="noopener noopener noopener" class="header-icon pull-left waves-effect waves-circle waves-light on" id="menu-toggle">
+        <a href="javascript:;" class="header-icon pull-left waves-effect waves-circle waves-light on" id="menu-toggle">
           <i class="icon icon-lg icon-navicon"></i>
         </a>
         <div class="flex-col header-title ellipsis">
@@ -158,7 +158,7 @@
           <i class="icon icon-lg icon-search"></i>
         </span>
         <input type="text" id="local-search-input" name="q" results="0" placeholder="search my blog..." class="form-control pull-left"/>
-        <a href="javascript:;"   rel="noopener noopener noopener" class="close pull-right waves-effect waves-circle waves-light">
+        <a href="javascript:;" class="close pull-right waves-effect waves-circle waves-light">
           <i class="icon icon-lg icon-close"></i>
         </a>
     </div>
@@ -213,7 +213,7 @@
 <li>Bin 64 to Bin 126 – Large bin</li>
 </ul>
 <h1 id="fastbin"><a href="#fastbin" class="headerlink" title="fastbin"></a>fastbin</h1><p>fastbin存储的块大小范围在（16-80）字节（64位系统是32-160）。之前提到了fastbin个数为10，每一个fastbin存放着指向固定大小空闲块的指针，从下标为0开始它们分别存储大小为16, 24, 32, 40, 48, 56, 64, 72, 80（64位下是从32开始16字节递增）。然而在源代码中定义了fastbin的最大使用大小为（64字节）</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">define DEFAULT_MXFAST     (64 * SIZE_SZ &#x2F; 4)</span></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">define DEFAULT_MXFAST     (64 * SIZE_SZ &#x2F; 4)</span><br></pre></td></tr></table></figure>
 <p>所以通常情况下fastbin只用到下标6为止。</p>
 <p>为了提高小堆块的使用速度，fastbin中即使有两个相邻的空闲块，他们也不会去合并（所有的空闲块的前一个使用位设置成1），同时为了可以快速获取堆块，fastbin采用的是单链表的方式将空闲块连接起来，并且添加和删除都是直接对fastbin中第一个块进行操作，也就是FILO（先进后出）的结构。在初始化的时候fastbin是空的，所以即使申请的大小属于fastbin，也不会交由fastbin来处理而是通过smallbin处理，如果还是空的则交给unsroted bin处理。</p>
 <figure class="image-box">
@@ -236,7 +236,7 @@
             </figure>
 
 <p>这里有一个小坑，fast bin是单链表结构所以fastbinY数组中每一个位置都对应单独一个空闲块的链表，而其他的bin都是双向循环链表，所以bins的数组长度为：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span></pre></td><td class="code"><pre><span class="line">mchunkptr bins[NBINS * 2 - 2];</span></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mchunkptr bins[NBINS * 2 - 2];</span><br></pre></td></tr></table></figure>
 <p>也就是说，bins[0]和bins[1]代表的是unsorted bin的链表头的fd和bk。其他的和此类似。</p>
 <h1 id="large-bin"><a href="#large-bin" class="headerlink" title="large bin"></a>large bin</h1><p>large bin与small bin类似，他存放大于或等于512（1024）的块。它操作块的速度是最慢的。<br>large bin的特性如下：</p>
 <ol>
@@ -290,7 +290,7 @@
 <td align="center">FIFO（对于相同大小的块而言）</td>
 </tr>
 </tbody></table>
-<h1 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h1><p>1.<a href="https://segmentfault.com/a/1190000005118060"    rel="noopener noopener noopener noopener">https://segmentfault.com/a/1190000005118060</a><br>2.<a href="https://segmentfault.com/a/1190000005183474"    rel="noopener noopener noopener noopener">https://segmentfault.com/a/1190000005183474</a><br>3.<a href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/"    rel="noopener noopener noopener noopener">https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/</a><br>4.<a href="https://paper.seebug.org/445/"    rel="noopener noopener noopener noopener">https://paper.seebug.org/445/</a><br>5.<a href="https://blog.csdn.net/qq_41453285/article/details/96865321"    rel="noopener noopener noopener noopener">https://blog.csdn.net/qq_41453285/article/details/96865321</a><br>6.<a href="https://xz.aliyun.com/t/6596"    rel="noopener noopener noopener noopener">https://xz.aliyun.com/t/6596</a></p>
+<h1 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h1><p>1.<a href="https://segmentfault.com/a/1190000005118060" target="_blank" rel="noopener">https://segmentfault.com/a/1190000005118060</a><br>2.<a href="https://segmentfault.com/a/1190000005183474" target="_blank" rel="noopener">https://segmentfault.com/a/1190000005183474</a><br>3.<a href="https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/" target="_blank" rel="noopener">https://sploitfun.wordpress.com/2015/02/10/understanding-glibc-malloc/comment-page-1/</a><br>4.<a href="https://paper.seebug.org/445/" target="_blank" rel="noopener">https://paper.seebug.org/445/</a><br>5.<a href="https://blog.csdn.net/qq_41453285/article/details/96865321" target="_blank" rel="noopener">https://blog.csdn.net/qq_41453285/article/details/96865321</a><br>6.<a href="https://xz.aliyun.com/t/6596" target="_blank" rel="noopener">https://xz.aliyun.com/t/6596</a></p>
 
         </div>
         
@@ -383,7 +383,7 @@
     <div class="bottom">
         <p>
             <span>
-                init13 &copy; 2017 - 2020
+                init13 &copy; 2017 - 2021
             </span>
         		
            	
@@ -415,7 +415,7 @@
 </footer>
 
     <div class="mask" id="mask"></div>
-<a href="javascript:;"  rel="noopener noopener" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
+<a href="javascript:;" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
 
 
     

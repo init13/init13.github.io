@@ -26,7 +26,7 @@
         window.lazyScripts=[];
     </script>
     
-</head>
+<meta name="generator" content="Hexo 4.2.1"></head>
 
 
 <body>
@@ -34,7 +34,7 @@
 
     <aside id="menu" class="">
   <div class="inner flex-row-vertical">
-    <a href="javascript:;"  rel="noopener noopener" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
+    <a href="javascript:;" class="header-icon waves-effect waves-circle waves-light" id="menu-off">
         <i class="icon icon-lg icon-close"></i>
     </a>
     <div class="brand-wrap">
@@ -117,7 +117,7 @@
     <main id="main">
         <header class="top-header" id="header">
     <div class="flex-row clearfix">
-        <a href="javascript:;"   rel="noopener noopener noopener" class="header-icon pull-left waves-effect waves-circle waves-light on" id="menu-toggle">
+        <a href="javascript:;" class="header-icon pull-left waves-effect waves-circle waves-light on" id="menu-toggle">
           <i class="icon icon-lg icon-navicon"></i>
         </a>
         <div class="flex-col header-title ellipsis">
@@ -158,7 +158,7 @@
           <i class="icon icon-lg icon-search"></i>
         </span>
         <input type="text" id="local-search-input" name="q" results="0" placeholder="search my blog..." class="form-control pull-left"/>
-        <a href="javascript:;"   rel="noopener noopener noopener" class="close pull-right waves-effect waves-circle waves-light">
+        <a href="javascript:;" class="close pull-right waves-effect waves-circle waves-light">
           <i class="icon icon-lg icon-close"></i>
         </a>
     </div>
@@ -401,7 +401,7 @@
 </tbody></table>
 <p>注意无论是32位还是64位的CPU段寄存器一直都是16位宽。<br>其中fs，gs是80386起增加的两个辅助段寄存器,在这之前只有一个辅助段寄存器ES,增加这两个寄存器是为了减轻ES寄存器的负担,并能更好地配合适用于通用寄存器组的基址和变址寄存器。</p>
 <p>同时，在真正的32位CPU诞生后出现了两种不同的工作方式：实模式和保护模式<br>在实模式下，CPU只有20根地址线，段寄存器的作用是存放相应的段的地址，并通过向左移4位然后与段偏移量相加获取地址。<br>在保护模式下，引用了段页管理机制，所以段寄存器的作用变成了存储相应的段页选择的地址。</p>
-<p><a href="https://blog.csdn.net/qq_43401808/article/details/86506612"    rel="noopener noopener noopener noopener">网上似乎还有一个64位模式</a>，这个模式下处理器把CS/DS/ES/SS的段基都当作0，忽略与之关联的段描述符中的段基地址。这样就为代码/数据/栈创建了平坦的地址空间。但是FS/GS段寄存器是例外。在计算线性地址时，这两个段寄存器可能被用作额外的基址寄存器<br><a href="https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers"    rel="noopener noopener noopener noopener">附另一个参考</a></p>
+<p><a href="https://blog.csdn.net/qq_43401808/article/details/86506612" target="_blank" rel="noopener">网上似乎还有一个64位模式</a>，这个模式下处理器把CS/DS/ES/SS的段基都当作0，忽略与之关联的段描述符中的段基地址。这样就为代码/数据/栈创建了平坦的地址空间。但是FS/GS段寄存器是例外。在计算线性地址时，这两个段寄存器可能被用作额外的基址寄存器<br><a href="https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers" target="_blank" rel="noopener">附另一个参考</a></p>
 <h1 id="指令指针寄存器"><a href="#指令指针寄存器" class="headerlink" title="指令指针寄存器"></a>指令指针寄存器</h1><table>
 <thead>
 <tr>
@@ -420,7 +420,7 @@
 <td align="center">ip</td>
 </tr>
 </tbody></table>
-<p><a href="https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html"    rel="noopener noopener noopener noopener">网上无意到一个用rip寻址的方法，记录一下防止以后不知道是啥。</a></p>
+<p><a href="https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html" target="_blank" rel="noopener">网上无意到一个用rip寻址的方法，记录一下防止以后不知道是啥。</a></p>
 <h1 id="标志位寄存器"><a href="#标志位寄存器" class="headerlink" title="标志位寄存器"></a>标志位寄存器</h1><p>由于intel处理器在指令集架构上始终保持前向兼容，所以这里我们从16位开始介绍，重复的部分就不再赘述了。</p>
 <h2 id="8086-80186标志寄存器FLAGS"><a href="#8086-80186标志寄存器FLAGS" class="headerlink" title="8086/80186标志寄存器FLAGS"></a>8086/80186标志寄存器FLAGS</h2><figure class="image-box">
                 <a rel=常用寄存器 href="/img/posts-img/register-1.png" title="avatar" data-fancybox="images"><img src="/img/posts-img/register-1.png" alt="avatar" title="" class=""></a>
@@ -437,7 +437,7 @@
                 <p>avatar</p>
             </figure>
 <p>RF(Restart Flag)重启动标志:重启动标志RF用来控制是否接受调试故障。规定：RF=0时，表示“接受”调试故障，否则拒绝之。在成功执行完一条指令后，处理机把RF置为0，当接受到一个非调试故障时，处理机就把它置为1。<br>VM(Virtual 8086 Mode)虚拟8086方式标志:如果该标志的值为1，则表示处理机处于虚拟的8086方式下的工作状态，否则，处理机处于一般保护方式下的工作状态。</p>
-<p><a href="https://blog.csdn.net/qq_43401808/article/details/86472254"    rel="noopener noopener noopener noopener">这里作者分了很多部分介绍，这里就不详细介绍了</a></p>
+<p><a href="https://blog.csdn.net/qq_43401808/article/details/86472254" target="_blank" rel="noopener">这里作者分了很多部分介绍，这里就不详细介绍了</a></p>
 <ul>
 <li>8个32位通用寄存器：</li>
 </ul>
@@ -446,7 +446,7 @@
 <p>6个段寄存器(ES、CS、SS、DS、FS和GS)</p>
 <p>1个指令指针寄存器(EIP)</p>
 <p>1个标志寄存器(EFlags)</p>
-<p>参考链接：<br>1.<a href="https://blog.csdn.net/qq_43401808/article/details/86506612"    rel="noopener noopener noopener noopener">https://blog.csdn.net/qq_43401808/article/details/86506612</a><br>2.<a href="https://www.cnblogs.com/wisehead/articles/3819233.html"    rel="noopener noopener noopener noopener">https://www.cnblogs.com/wisehead/articles/3819233.html</a><br>3.<a href="https://blog.csdn.net/yang_yulei/article/details/22613327"    rel="noopener noopener noopener noopener">https://blog.csdn.net/yang_yulei/article/details/22613327</a><br>4.<a href="https://www.jianshu.com/p/57128e477efb"    rel="noopener noopener noopener noopener">https://www.jianshu.com/p/57128e477efb</a><br>5.<a href="https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers"    rel="noopener noopener noopener noopener">https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers</a><br>6.<a href="https://blog.csdn.net/qq_35985044/article/details/81781884"    rel="noopener noopener noopener noopener">https://blog.csdn.net/qq_35985044/article/details/81781884</a><br>7.<a href="https://blog.csdn.net/weixin_40913261/article/details/90762210"    rel="noopener noopener noopener noopener">https://blog.csdn.net/weixin_40913261/article/details/90762210</a><br>8.<a href="https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html"    rel="noopener noopener noopener noopener">https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html</a><br>9.<a href="https://blog.csdn.net/weixin_41890599/article/details/99866410"    rel="noopener noopener noopener noopener">https://blog.csdn.net/weixin_41890599/article/details/99866410</a><br>10.<a href="https://blog.csdn.net/qq_43401808/article/details/86472254"    rel="noopener noopener noopener noopener">https://blog.csdn.net/qq_43401808/article/details/86472254</a><br>11.<a href="https://blog.csdn.net/qq_43401808/article/details/86472472"    rel="noopener noopener noopener noopener">https://blog.csdn.net/qq_43401808/article/details/86472472</a><br>12.<a href="https://blog.csdn.net/qq_43401808/article/details/86472592"    rel="noopener noopener noopener noopener">https://blog.csdn.net/qq_43401808/article/details/86472592</a><br>13.<a href="https://www.cnblogs.com/bxdm/p/6931562.html"    rel="noopener noopener noopener noopener">https://www.cnblogs.com/bxdm/p/6931562.html</a></p>
+<p>参考链接：<br>1.<a href="https://blog.csdn.net/qq_43401808/article/details/86506612" target="_blank" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86506612</a><br>2.<a href="https://www.cnblogs.com/wisehead/articles/3819233.html" target="_blank" rel="noopener">https://www.cnblogs.com/wisehead/articles/3819233.html</a><br>3.<a href="https://blog.csdn.net/yang_yulei/article/details/22613327" target="_blank" rel="noopener">https://blog.csdn.net/yang_yulei/article/details/22613327</a><br>4.<a href="https://www.jianshu.com/p/57128e477efb" target="_blank" rel="noopener">https://www.jianshu.com/p/57128e477efb</a><br>5.<a href="https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers" target="_blank" rel="noopener">https://stackoverflow.com/questions/21165678/why-64-bit-mode-long-mode-doesnt-use-segment-registers</a><br>6.<a href="https://blog.csdn.net/qq_35985044/article/details/81781884" target="_blank" rel="noopener">https://blog.csdn.net/qq_35985044/article/details/81781884</a><br>7.<a href="https://blog.csdn.net/weixin_40913261/article/details/90762210" target="_blank" rel="noopener">https://blog.csdn.net/weixin_40913261/article/details/90762210</a><br>8.<a href="https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html" target="_blank" rel="noopener">https://www.polarxiong.com/archives/x64下PIC的新寻址方式-RIP相对寻址.html</a><br>9.<a href="https://blog.csdn.net/weixin_41890599/article/details/99866410" target="_blank" rel="noopener">https://blog.csdn.net/weixin_41890599/article/details/99866410</a><br>10.<a href="https://blog.csdn.net/qq_43401808/article/details/86472254" target="_blank" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86472254</a><br>11.<a href="https://blog.csdn.net/qq_43401808/article/details/86472472" target="_blank" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86472472</a><br>12.<a href="https://blog.csdn.net/qq_43401808/article/details/86472592" target="_blank" rel="noopener">https://blog.csdn.net/qq_43401808/article/details/86472592</a><br>13.<a href="https://www.cnblogs.com/bxdm/p/6931562.html" target="_blank" rel="noopener">https://www.cnblogs.com/bxdm/p/6931562.html</a></p>
 
         </div>
         
@@ -502,7 +502,7 @@
         <aside class="post-widget">
             <nav class="post-toc-wrap" id="post-toc">
                 <strong>目录</strong>
-                <ol class="post-toc"><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#通用寄存器"><span class="post-toc-number">1.</span> <span class="post-toc-text">通用寄存器</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#四个数据寄存器"><span class="post-toc-number">1.1.</span> <span class="post-toc-text">四个数据寄存器</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#两个变址寄存器"><span class="post-toc-number">1.2.</span> <span class="post-toc-text">两个变址寄存器</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#两个指针寄存器"><span class="post-toc-number">1.3.</span> <span class="post-toc-text">两个指针寄存器</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#64位机器中新增的8个通用寄存器"><span class="post-toc-number">1.4.</span> <span class="post-toc-text">64位机器中新增的8个通用寄存器</span></a></li></ol></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#六个段寄存器"><span class="post-toc-number">2.</span> <span class="post-toc-text">六个段寄存器</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#指令指针寄存器"><span class="post-toc-number">3.</span> <span class="post-toc-text">指令指针寄存器</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#标志位寄存器"><span class="post-toc-number">4.</span> <span class="post-toc-text">标志位寄存器</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#8086-80186标志寄存器FLAGS"><span class="post-toc-number">4.1.</span> <span class="post-toc-text">8086/80186标志寄存器FLAGS</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#80286增加了IOPL-NT标志位，主要服务于保护模式和多任务机制。"><span class="post-toc-number">4.2.</span> <span class="post-toc-text">80286增加了IOPL/NT标志位，主要服务于保护模式和多任务机制。</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#80386-386-Intel386标志寄存器EFLAGS-增加了RF-VM-标志位，用于支持虚拟8086模式与指令断点调试。"><span class="post-toc-number">4.3.</span> <span class="post-toc-text">80386/386/Intel386标志寄存器EFLAGS,增加了RF/VM 标志位，用于支持虚拟8086模式与指令断点调试。</span></a></li></ol></li></ol>
+                <ol class="post-toc"><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#通用寄存器"><span class="post-toc-number">1.</span> <span class="post-toc-text">通用寄存器</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#四个数据寄存器"><span class="post-toc-number">1.1.</span> <span class="post-toc-text">四个数据寄存器</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#两个变址寄存器"><span class="post-toc-number">1.2.</span> <span class="post-toc-text">两个变址寄存器</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#两个指针寄存器"><span class="post-toc-number">1.3.</span> <span class="post-toc-text">两个指针寄存器</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#64位机器中新增的8个通用寄存器"><span class="post-toc-number">1.4.</span> <span class="post-toc-text">64位机器中新增的8个通用寄存器</span></a></li></ol></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#六个段寄存器"><span class="post-toc-number">2.</span> <span class="post-toc-text">六个段寄存器</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#指令指针寄存器"><span class="post-toc-number">3.</span> <span class="post-toc-text">指令指针寄存器</span></a></li><li class="post-toc-item post-toc-level-1"><a class="post-toc-link" href="#标志位寄存器"><span class="post-toc-number">4.</span> <span class="post-toc-text">标志位寄存器</span></a><ol class="post-toc-child"><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#8086-80186标志寄存器FLAGS"><span class="post-toc-number">4.1.</span> <span class="post-toc-text">8086&#x2F;80186标志寄存器FLAGS</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#80286增加了IOPL-NT标志位，主要服务于保护模式和多任务机制。"><span class="post-toc-number">4.2.</span> <span class="post-toc-text">80286增加了IOPL&#x2F;NT标志位，主要服务于保护模式和多任务机制。</span></a></li><li class="post-toc-item post-toc-level-2"><a class="post-toc-link" href="#80386-386-Intel386标志寄存器EFLAGS-增加了RF-VM-标志位，用于支持虚拟8086模式与指令断点调试。"><span class="post-toc-number">4.3.</span> <span class="post-toc-text">80386&#x2F;386&#x2F;Intel386标志寄存器EFLAGS,增加了RF&#x2F;VM 标志位，用于支持虚拟8086模式与指令断点调试。</span></a></li></ol></li></ol>
             </nav>
             <div class="toc-bar"><div>
         </aside>
@@ -532,7 +532,7 @@
     <div class="bottom">
         <p>
             <span>
-                init13 &copy; 2017 - 2020
+                init13 &copy; 2017 - 2021
             </span>
         		
            	
@@ -564,7 +564,7 @@
 </footer>
 
     <div class="mask" id="mask"></div>
-<a href="javascript:;"  rel="noopener noopener" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
+<a href="javascript:;" id="gotop" class="waves-effect waves-circle waves-light"><span class="icon icon-lg icon-chevron-up"></span></a>
 
 
     
