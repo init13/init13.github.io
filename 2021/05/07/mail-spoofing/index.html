@@ -197,7 +197,7 @@
             </figure>
 <p>&emsp;&emsp;信封部分中“MAIL FROM”字段表示发件人的地址，“RECP TO”表示收件人的地址，STMP服务器会通过DNS查询字段中“@”之后地址的MX记录，并将邮件发送至指定的邮件服务器中。<br>&emsp;&emsp;首部的字段与HTTP请求头类似，用于指明各类信息，其中“FROM”字段表示发件人的地址，“To”表示收件人地址，注意这两个字段可以与信封部分中收件人与发件人的不同。通常情况下，信封部分的信息是由于告知收件服务器，而首部字段中的信息是用于展示给收件人的。这些字段是可以随便修改的，这也是为什么会出现邮件伪造的情况。但是目前主流的邮件服务厂商（QQ、163、gmail、core mail等）都会通过对这两个部分进行审查以防止邮件伪造的情况发生，例如查询“MAIL FROM”中域名中DNS的TXT记录，通过判断发送者的IP地址是否在指定范围内来确定是否为伪造邮件，此外如果“RECP TO”与“To”这两个字段不相同时，会出现代发的提示。<br>&emsp;&emsp;主体部分即使邮件的正文，如果需要发送附件，则通过MIME的方式进行扩展，该扩展方式与HTTP协议相同，这里不过多描述。</p>
 <p><strong><big>POP:</big></strong> 目前POP协议常用的是第三版，也就是POP3。该协议采用的C/S架构，协议允许电子邮件客户端下载服务器上的邮件，但是在客户端的操作（如移动邮件、标记已读等），不会反馈到服务器上，比如通过客户端收取了邮箱中的3封邮件并移动到其他文件夹，邮箱服务器上的这些邮件是没有同时被移动的。</p>
-<p><strong><big>IMAP</big></strong> 提供webmail与电子邮件客户端之间的双向通信，客户端的操作都会反馈到服务器上，对邮件进行的操作，服务器上的邮件也会做相应的动作。IMAP提供的摘要浏览功能可以让你在阅读完所有的邮件到达时间、主题、发件人、大小等信息后才作出是否下载的决定。此外，IMAP 更好地支持了从多个不同设备中随时访问新邮件。</p>
+<p><strong><big>IMAP:</big></strong> 提供webmail与电子邮件客户端之间的双向通信，客户端的操作都会反馈到服务器上，对邮件进行的操作，服务器上的邮件也会做相应的动作。IMAP提供的摘要浏览功能可以让你在阅读完所有的邮件到达时间、主题、发件人、大小等信息后才作出是否下载的决定。此外，IMAP 更好地支持了从多个不同设备中随时访问新邮件。</p>
 <h1 id="邮件伪造"><a href="#邮件伪造" class="headerlink" title="邮件伪造"></a>邮件伪造</h1><p>邮件伪造主要是通过对目标邮箱的MX（mail exchange）服务器发送伪造邮件，MX记录可以通过DNS查询得到。在没有相应工具的情况下可以使用telnet连接服务器投递邮件。</p>
 <p>swaks是一款SMTP测试工具，可以灵活的操作SMTP协议报文，基本命令如下：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">swaks --to init13@github.com --from xxx@chacuo.net --body <span class="string">"test"</span> --header <span class="string">"Subject:tests"</span> --h-From <span class="string">'=?GB2312?B?UVHTys/kudzA7dSx?= &lt;admin@gmail.com&gt;'</span>  --ehlo chacuo.net</span><br></pre></td></tr></table></figure>
@@ -205,12 +205,12 @@
 <h1 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h1><p>由于邮件协议是属于应用层的协议，同时由于邮件协议本身的问题，因此邮件伪造会十分的简单。但是不同邮件厂商对邮件伪造和垃圾邮件的处理手段会有一定的差异，因此如果是针对个人的钓鱼攻击，最好事先调查其使用邮箱的习惯。</p>
 <p>目前防止邮件伪造主要为以下两种手段：<br>1.检查目标地址的spf记录，如果发送方的IP地址不匹配则视为垃圾邮件，这个记录存放在DNS的TXT记录中,以qq.com为例：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">qq.com  text &#x3D; &quot;v&#x3D;spf1 include:spf.mail.qq.com -all&quot;</span><br><span class="line">spf.mail.qq.com text &#x3D; &quot;v&#x3D;spf1 include:spf-a.mail.qq.com include:spf-b.mail.qq.com include:spf-c.mail.qq.com include:spf-d.mail.qq.com include:spf-e.mail.qq.com include:spf-f.mail.qq.com include:spf-g.mail.qq.com -all&quot;</span><br><span class="line">spf-a.mail.qq.com   text &#x3D; &quot;v&#x3D;spf1 ip4:203.205.251.0&#x2F;24 ip4:103.7.29.0&#x2F;24 ip4:59.36.129.0&#x2F;24 ip4:113.108.23.0&#x2F;24 ip4:113.108.11.0&#x2F;24 ip4:119.147.193.0&#x2F;24 ip4:119.147.194.0&#x2F;24 ip4:59.78.209.0&#x2F;24 ip4:113.96.223.0&#x2F;24 ip4:183.3.226.0&#x2F;24 ip4:183.3.255.0&#x2F;24 ip4:59.36.132.0&#x2F;24 -all&quot;</span><br></pre></td></tr></table></figure>
-<p>其中，spf1表示使用spf版本为1，include表示采用与spf.mail.qq.com一样的SPF记录，-all表示除了前面声明的其他IP地址均不匹配。详细解析可以看看这篇博客：<a href="http://www.renfei.org/blog/introduction-to-spf.html" target="_blank" rel="noopener">http://www.renfei.org/blog/introduction-to-spf.html</a></p>
-<p>目前大部分厂商会检查发件人的spf记录，如果发送方的地址甚至连dns记录都没有那么该邮件会直接拒收，但是如果有dns记录但是没有SPF记录或者SPF配置错误，就可以绕过检测。然而会不会被视为垃圾邮件就看内容和发送的地址有没有被标记了。spf记录合理性检查：<a href="https://www.kitterman.com/spf/validate.html" target="_blank" rel="noopener">https://www.kitterman.com/spf/validate.html</a></p>
-<p>如果是企业内部的邮件服务器，且刚好邮件服务器的出口与企业外网出口相同的话。。。。。。<br>这里还可以推荐一个代发邮件的服务商 <a href="https://www.smtp2go.com" target="_blank" rel="noopener">https://www.smtp2go.com</a></p>
+<p>其中，spf1表示使用spf版本为1，include表示采用与spf.mail.qq.com一样的SPF记录，-all表示除了前面声明的其他IP地址均不匹配。详细解析可以看看这篇博客: <a href="http://www.renfei.org/blog/introduction-to-spf.html" target="_blank" rel="noopener">http://www.renfei.org/blog/introduction-to-spf.html</a></p>
+<p>目前大部分厂商会检查发件人的spf记录，如果发送方的地址甚至连dns记录都没有那么该邮件会直接拒收，但是如果有dns记录但是没有SPF记录或者SPF配置错误，就可以绕过检测。然而会不会被视为垃圾邮件就看内容和发送的地址有没有被标记了。spf记录合理性检查: <a href="https://www.kitterman.com/spf/validate.html" target="_blank" rel="noopener">https://www.kitterman.com/spf/validate.html</a></p>
+<p>如果是企业内部的邮件服务器，且刚好邮件服务器的出口与企业外网出口相同的话。。。。。。<br>这里还可以推荐一个代发邮件的服务商: <a href="https://www.smtp2go.com" target="_blank" rel="noopener">https://www.smtp2go.com</a></p>
 <p>2.检查“MAIL FROM”与“From”字段<br>当伪造邮件时，这两个字段不相同，大部分的邮件厂商会提示邮件为代发。</p>
-<p>也就是说即使上一种检测手段通过指定一些没有设置SPF记录的域名绕过了，但是如果想要可性度高一点的话还是需要对From字段进行伪造。<br>这里以这篇文章中的QQ邮件伪造为例：<br><a href="https://bbs.ichunqiu.com/thread-55388-1-1.html" target="_blank" rel="noopener">https://bbs.ichunqiu.com/thread-55388-1-1.html</a> </p>
-<p>文章中提到了填充大量的特殊字符，从而使邮箱客户端截取实际发件人失败，导致实际显示效果为伪造的邮箱发件人，然而实际上其实与特殊字符无关，是客户端处理编码后的字符长度处理的问题。如：</p>
+<p>也就是说即使上一种检测手段通过指定一些没有设置SPF记录的域名绕过了，但是如果想要可性度高一点的话还是需要对From字段进行伪造。</p>
+<p>这里以这篇文章中的QQ邮件伪造为例: <a href="https://bbs.ichunqiu.com/thread-55388-1-1.html" target="_blank" rel="noopener">https://bbs.ichunqiu.com/thread-55388-1-1.html</a><br>文章中提到了填充大量的特殊字符，从而使邮箱客户端截取实际发件人失败，导致实际显示效果为伪造的邮箱发件人，然而实际上其实与特殊字符无关，是客户端处理编码后的字符长度处理的问题。如：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">swaks --to XXXXXX@qq.com --from admin@chacuo.net --body <span class="string">"hello world"</span> --h-From <span class="string">"=?gb2312?B?bWFuYWdlciA8cm9vdEBnbWFpbC5jb20+IA==?=   </span></span><br><span class="line"><span class="string"> =?gb2312?B?IEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEg?= </span></span><br><span class="line"><span class="string"> =?gb2312?B?IEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEg?= </span></span><br><span class="line"><span class="string"> =?gb2312?B?IEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEg?= </span></span><br><span class="line"><span class="string"> =?gb2312?B?IEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEg?= </span></span><br><span class="line"><span class="string"> =?gb2312?B?IEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBQUEgIEFBIA==IEFBIA==IEE=?= </span></span><br><span class="line"><span class="string">  &lt;admin@chacuo.net&gt;"</span> --h-Subject <span class="string">"no problem"</span> --ehlo chacuo.net</span><br></pre></td></tr></table></figure>
 <p>web端中点开详细页面中的收件人地址为“admin@chacuo.”，如果再多加一个字符把这个最后一个字符“.”覆盖则会出现错误显示。这是因为QQ邮箱web端检测编码与关键字符“&lt;&gt;”的逻辑处理有一定的问题，并且对于解码后的字符串长度处理不当最终导致该问题的出现。同时QQ邮箱虽然检测了关键字符如“<a href="mailto:admin@qq.com">admin@qq.com</a>”来防止伪造邮件，但是可以通过编码绕过。</p>
 <p>以上只是针对QQ邮箱web客户端的问题，然而不同的客户端处理的方式不同，因此即使网页版的QQ邮箱被绕过，而手机版的客户端可能并无影响。</p>
@@ -222,7 +222,7 @@
     <div class="content">
         
 <span class="post-time">
-    Last updated: <time datetime="2021-05-13T05:28:10.847Z" itemprop="dateUpdated">2021-05-13 00:28:10</time>
+    Last updated: <time datetime="2021-05-13T05:35:55.906Z" itemprop="dateUpdated">2021-05-13 00:35:55</time>
 </span><br>
 
 
